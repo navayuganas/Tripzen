@@ -1,36 +1,22 @@
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from config import Config
-
-db = SQLAlchemy()
+from flask import Flask, jsonify, request
+from db import get_db_connection
 
 app = Flask(__name__)
-app.config.from_object(Config)
 
-db.init_app(app)
-
-@app.route("/")
-def home():
-    return "Backend working"
+@app.route('/getTable', methods=['GET'])
+def get_tables():
+    try:
+        con = get_db_connection()
+        cursor = con.cursor()
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        cursor.close()
+        con.close()
+        table_names = [table[0] for table in tables]
+        return jsonify({"tables": table_names}), 200
+    except mysql.connector.Error as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
+    print("Connecting to database...")
     app.run(debug=True)
-
-    from flask import request, jsonify
-from models.message import Message
-from app import db
-
-@app.route("/send", methods=["POST"])
-def send_message():
-    data = request.json
-
-    msg = Message(
-        session_id=data["session_id"],
-        message=data["message"],
-        sender="user"
-    )
-
-    db.session.add(msg)
-    db.session.commit()
-
-    return jsonify({"status": "message saved"})

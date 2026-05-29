@@ -19,19 +19,14 @@ CREATE TABLE chat_sessions (
 CREATE TABLE messages (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     session_id BIGINT,
-    
     sender ENUM('user', 'bot'),
-    
     message TEXT,
-    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY (session_id) REFERENCES chat_sessions(id)
 );
 
 CREATE TABLE itineraries (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    
     session_id BIGINT,
     user_id BIGINT,
 
