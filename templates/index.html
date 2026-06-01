@@ -1,25 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset = "UTF =8"/>
-        <meta name = "viewport" content = "width=device-width,initial-scale=1.0"/>
-        <title>ChatBot</title>
-        <link rel = "stylesheet" href = "style.css"/>
-    </head>
 
-    <body>
-        <div class ="Chat-window">
-            <div class = "Header">
-                AI Generated ChatBot
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChatBot</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href= "../static/style.css" />
+</head>
+
+<body>
+    <div class="app">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <button class="new-chat-btn" id="newChatBtn">
+                    <i class="ti ti-plus"></i> New chat
+                </button>
+                <div class="search-box">
+                    <i class="ti ti-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search chats..." />
+                </div>
             </div>
-            <div class = "ChatBox">
-                <div class="message">Hello! How can I help you today?</div> 
+            <div class="sidebar-scroll">
+                <div id="searchResults" class="search-results">
+                    <div class="section-label">Search results</div>
+                    <div class="chat-list" id="searchList"></div>
+                </div>
+                <div id="defaultContent">
+                    <div class="sidebar-section">
+                        <div class="section-label collapsible">
+                            Itineraries <span class="chevron">▾</span>
+                        </div>
+                        <div class="chat-list">
+                            <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>Paris 5-day trip</span></div>
+                            <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>Tokyo weekend plan</span>
+                            </div>
+                            <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>NYC food tour</span></div>
+                        </div>
+                    </div>
+                    <div class="sidebar-section">
+                        <div class="section-label collapsible">
+                            Recent <span class="chevron">▾</span>
+                        </div>
+                        <div class="chat-list" id="recentList">
+                            <div class="chat-item active"><i class="ti ti-message"></i><span>Hello! How can I
+                                    help?</span></div>
+                            <div class="chat-item"><i class="ti ti-message"></i><span>Recipe suggestions</span></div>
+                            <div class="chat-item"><i class="ti ti-message"></i><span>Python help</span></div>
+                            <div class="chat-item"><i class="ti ti-message"></i><span>Plan my week</span></div>
+                            <div class="chat-item"><i class="ti ti-message"></i><span>Email drafting</span></div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class = "input-area">
-                <textarea placeholder="Type your message..." rows = "1"></textarea>
-                <button class="send-button">Send</button>
+            <div class="sidebar-footer">
+                <div class="profile-row">
+                    <div class="avatar">YO</div>
+                    <div class="profile-info">
+                        <div class="profile-name">Your Name</div>
+                        <div class="profile-email">you@example.com</div>
+                    </div>
+                    <i class="ti ti-dots" style="font-size:16px; color:#916a8a;"></i>
+                </div>
             </div>
         </div>
-        <script src="script.js"></script>
-    </body>
+        <div class="main">
+            <div class="Chat-window">
+                <div class="Header">
+                    <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
+                        <i class="ti ti-menu-2"></i>
+                    </button>
+                    <span class="header-title">AI Generated ChatBot</span>
+                </div>
+                <div class="ChatBox" id="chatbox">
+                    <div class="message">Hello! How can I help you today?</div>
+                </div>
+                <div class="input-area">
+                    <textarea id="msgInput" placeholder="Type your message..." rows="1"></textarea>
+                    <button class="send-button" id="sendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="../static/script.js"></script>
+</body>
+
 </html>
