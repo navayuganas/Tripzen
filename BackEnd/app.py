@@ -1,6 +1,9 @@
 from flask import Flask, jsonify, request
 from db import get_db_connection
 
+from flask_cors import CORS
+
+
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
 from models.chat_sessions import get_sessions_by_user, get_session_by_id, create_session, delete_session
 from models.messages import get_messages_by_session, create_message, delete_messages_by_session
@@ -11,6 +14,7 @@ from models.preferences import get_preferences_by_user, create_preferences, upda
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
 
 app = Flask(__name__)
+CORS(app)
 
 
 
@@ -288,6 +292,10 @@ def new_destination():
         data.get('best_season')
     )
     return jsonify({"message": "Destination created", "destination_id": new_id}), 201
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    return jsonify({"reply": "hello"})
 
 if __name__ == "__main__":
     print("Connecting to database...")
