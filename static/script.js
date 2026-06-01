@@ -49,8 +49,8 @@ document.querySelectorAll('.chat-item, .itinerary-item').forEach(item => {
     this.classList.add('active');
   });
 });
-
-function sendMessage() {
+ 
+async function sendMessage() {
   const text = msgInput.value.trim();
   if (!text) return;
 
@@ -60,8 +60,29 @@ function sendMessage() {
   chatbox.appendChild(userMsg);
 
   msgInput.value = '';
-  msgInput.style.height = 'auto';
   chatbox.scrollTop = chatbox.scrollHeight;
+
+  try {
+    const response = await fetch("http://127.0.0.1:5000/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ message: text })
+    });
+
+    const data = await response.json();
+
+    const botMsg = document.createElement('div');
+    botMsg.className = 'message bot';
+    botMsg.textContent = data.reply;
+    chatbox.appendChild(botMsg);
+
+    chatbox.scrollTop = chatbox.scrollHeight;
+
+  } catch (error) {
+    console.error("Error:", error);
+  }
 }
 
 sendBtn.addEventListener('click', sendMessage);
