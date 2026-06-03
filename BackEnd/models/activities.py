@@ -1,4 +1,3 @@
-# models/activities.py
 from db import get_db_connection
 
 def get_activities_by_day(itinerary_day_id):

@@ -3,7 +3,6 @@ from db import get_db_connection
 
 from flask_cors import CORS
 
-
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
 from models.chat_sessions import get_sessions_by_user, get_session_by_id, create_session, delete_session
 from models.messages import get_messages_by_session, create_message, delete_messages_by_session
@@ -270,7 +269,7 @@ def destinations():
 
 @app.route('/destinations/<int:destination_id>', methods=['GET'])
 def destination(destination_id):
-    dest = get_destination_by_id(destination_id)
+    dest = get_destination_id(destination_id)
     if not dest:
         return jsonify({"error": "Destination not found"}), 404
     return jsonify(dest), 200

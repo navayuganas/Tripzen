@@ -1,4 +1,3 @@
-# models/itinerary_day.py
 from db import get_db_connection
 
 def get_days_by_itinerary(itinerary_id):
