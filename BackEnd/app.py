@@ -295,7 +295,7 @@ def new_destination():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    return jsonify({"reply": "hello"})
+    return jsonify({"reply": "Hello"})
 
 if __name__ == "__main__":
     print("Connecting to database...")

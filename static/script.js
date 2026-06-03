@@ -1,109 +1,189 @@
-const sidebar = document.getElementById('sidebar');
-const toggleBtn = document.getElementById('toggleBtn');
-const newChatBtn = document.getElementById('newChatBtn');
-const searchInput = document.getElementById('searchInput');
+const sidebar       = document.getElementById('sidebar');
+const toggleBtn     = document.getElementById('toggleBtn');
+const newChatBtn    = document.getElementById('newChatBtn');
+const searchInput   = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
-const searchList = document.getElementById('searchList');
-const defaultContent = document.getElementById('defaultContent');
-const chatbox = document.getElementById('chatbox');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
+const searchList    = document.getElementById('searchList');
+const defaultContent= document.getElementById('defaultContent');
+const chatbox       = document.getElementById('chatbox');
+const msgInput      = document.getElementById('msgInput');
+const sendBtn       = document.getElementById('sendBtn');
 
-const allChats = [
-  'Hello! How can I help?', 'Recipe suggestions', 'Python help',
-  'Plan my week', 'Email drafting', 'Paris 5-day trip',
-  'Tokyo weekend plan', 'NYC food tour'
-];
 
-toggleBtn.addEventListener('click', () => {
-  sidebar.classList.toggle('collapsed');
+let currentUserId   = localStorage.getItem('user_id');    // logged in user
+let currentSessionId= localStorage.getItem('session_id'); // current chat session
+
+window.addEventListener('load', async () => {
+    if (!currentUserId) {
+        // no user logged in — show default message
+        addMessageToUI('bot', 'Hello! Please register or login to start chatting.');
+        return;
+    }
+
+    // update profile in sidebar
+    updateProfile();
+
+    // load previous sessions in sidebar
+    await loadSessions();
+
+    // if existing session — load its messages
+    if (currentSessionId) {
+        await loadMessages(currentSessionId);
+    } else {
+        addMessageToUI('bot', 'Hello! How can I help you today?');
+    }
 });
 
-newChatBtn.addEventListener('click', () => {
-  chatbox.innerHTML = '';
-  const msg = document.createElement('div');
-  msg.className = 'message';
-  msg.textContent = 'New chat started! How can I help you?';
-  chatbox.appendChild(msg);
-  msgInput.focus();
-});
+async function loadSessions() {
+    const sessions = await getSessions(currentUserId);
+    const recentList = document.getElementById('recentList');
+    recentList.innerHTML = '';
 
-searchInput.addEventListener('input', () => {
-  const q = searchInput.value.trim().toLowerCase();
-  if (!q) {
-    searchResults.classList.remove('visible');
-    defaultContent.style.display = '';
-    return;
-  }
-  defaultContent.style.display = 'none';
-  searchResults.classList.add('visible');
-  const matches = allChats.filter(c => c.toLowerCase().includes(q));
-  searchList.innerHTML = matches.length
-    ? matches.map(c => `<div class="chat-item"><i class="ti ti-message"></i><span>${c}</span></div>`).join('')
-    : '<div class="no-results">No chats found</div>';
-});
+    sessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'chat-item';
+        item.innerHTML = `<i class="ti ti-message"></i><span>${session.title}</span>`;
 
-document.querySelectorAll('.chat-item, .itinerary-item').forEach(item => {
-  item.addEventListener('click', function () {
-    document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
-    this.classList.add('active');
-  });
-});
- 
-async function sendMessage() {
-  const text = msgInput.value.trim();
-  if (!text) return;
+        item.addEventListener('click', async () => {
+            // switch to this session
+            currentSessionId = session.id;
+            localStorage.setItem('session_id', session.id);
+            chatbox.innerHTML = '';
+            await loadMessages(session.id);
 
-  const userMsg = document.createElement('div');
-  userMsg.className = 'message user';
-  userMsg.textContent = text;
-  chatbox.appendChild(userMsg);
+            document.querySelectorAll('.chat-item')
+                    .forEach(i => i.classList.remove('active'));
+            item.classList.add('active');
+        });
 
-  msgInput.value = '';
-  chatbox.scrollTop = chatbox.scrollHeight;
-
-  try {
-    const response = await fetch("http://127.0.0.1:5000/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ message: text })
+        recentList.appendChild(item);
     });
-
-    const data = await response.json();
-
-    const botMsg = document.createElement('div');
-    botMsg.className = 'message bot';
-    botMsg.textContent = data.reply;
-    chatbox.appendChild(botMsg);
-
-    chatbox.scrollTop = chatbox.scrollHeight;
-
-  } catch (error) {
-    console.error("Error:", error);
-  }
 }
 
-sendBtn.addEventListener('click', sendMessage);
+async function loadMessages(session_id) {
+    const messages = await getMessages(session_id);
+    chatbox.innerHTML = '';
+
+    messages.forEach(msg => {
+        addMessageToUI(msg.sender, msg.message);
+    });
+
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+function addMessageToUI(sender, text) {
+    const div = document.createElement('div');
+    div.className = `message ${sender === 'user' ? 'user' : ''}`;
+    div.textContent = text;
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+async function handleSendMessage() {
+    const text = msgInput.value.trim();
+    if (!text) return;
+
+    // clear input
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+
+    // show user message in UI
+    addMessageToUI('user', text);
+
+    // if no user logged in
+    if (!currentUserId) {
+        addMessageToUI('bot', 'Please login first to chat.');
+        return;
+    }
+
+    // if no session — create one
+    if (!currentSessionId) {
+        const session = await createSession(currentUserId, text.slice(0, 50));
+        currentSessionId = session.session_id;
+        localStorage.setItem('session_id', currentSessionId);
+        await loadSessions();
+    }
+
+    // save user message to backend
+    await sendMessage(currentSessionId, 'user', text);
+
+    // show typing indicator
+    const typing = document.createElement('div');
+    typing.className = 'message';
+    typing.textContent = 'Bot is typing...';
+    typing.id = 'typing';
+    chatbox.appendChild(typing);
+    chatbox.scrollTop = chatbox.scrollHeight;
+
+    // TODO: replace this with real AI response later
+    setTimeout(async () => {
+        const botReply = 'Hello';
+
+        // remove typing indicator
+        document.getElementById('typing')?.remove();
+
+        // show bot reply in UI
+        addMessageToUI('bot', botReply);
+
+        // save bot reply to backend
+        await sendMessage(currentSessionId, 'bot', botReply);
+    }, 1000);
+}
+
+newChatBtn.addEventListener('click', async () => {
+    currentSessionId = null;
+    localStorage.removeItem('session_id');
+    chatbox.innerHTML = '';
+    addMessageToUI('bot', 'New chat started! How can I help you?');
+    msgInput.focus();
+});
+
+sendBtn.addEventListener('click', handleSendMessage);
 
 msgInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+    }
 });
 
 msgInput.addEventListener('input', () => {
-  msgInput.style.height = 'auto';
-  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
 });
 
-const sections = document.querySelectorAll(".sidebar-section");
-sections.forEach(section => {
-    const header = section.querySelector(".collapsible");
+toggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+});
 
-    header.addEventListener("click", () => {
-        section.classList.toggle("closed");
+searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) {
+        searchResults.classList.remove('visible');
+        defaultContent.style.display = '';
+        return;
+    }
+    defaultContent.style.display = 'none';
+    searchResults.classList.add('visible');
+
+    const allItems = document.querySelectorAll('#recentList .chat-item span');
+    const matches  = [...allItems].filter(s => s.textContent.toLowerCase().includes(q));
+
+    searchList.innerHTML = matches.length
+        ? matches.map(s => `<div class="chat-item"><i class="ti ti-message"></i><span>${s.textContent}</span></div>`).join('')
+        : '<div class="no-results">No chats found</div>';
+});
+
+document.querySelectorAll('.sidebar-section').forEach(section => {
+    section.querySelector('.collapsible').addEventListener('click', () => {
+        section.classList.toggle('closed');
     });
 });
+
+function updateProfile() {
+    const name  = localStorage.getItem('full_name') || 'Your Name';
+    const email = localStorage.getItem('email') || 'you@example.com';
+
+    document.querySelector('.profile-name').textContent  = name;
+    document.querySelector('.profile-email').textContent = email;
+}
