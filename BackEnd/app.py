@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request
 from db import get_db_connection
-
+from langchain_ollama import ChatOllama
 from flask_cors import CORS
+
 
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
 from models.chat_sessions import get_sessions_by_user, get_session_by_id, create_session, delete_session
@@ -12,8 +13,10 @@ from models.activities import get_activities_by_day, create_activity, delete_act
 from models.preferences import get_preferences_by_user, create_preferences, update_preferences
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
 
+
 app = Flask(__name__)
 CORS(app)
+llm = ChatOllama(model="llama3")
 
 
 
@@ -294,7 +297,14 @@ def new_destination():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    return jsonify({"reply": "hello"})
+    data = request.json
+
+    response = llm.invoke(data["message"])
+
+    return jsonify({
+        "reply": response.content
+    })
+
 
 if __name__ == "__main__":
     print("Connecting to database...")
