@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
-from db import get_db_connection
-from langchain_ollama import ChatOllama
 from flask_cors import CORS
+from db import get_db_connection
 
 
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
@@ -12,11 +11,10 @@ from models.itinerary_day import get_days_by_itinerary, create_day, delete_days_
 from models.activities import get_activities_by_day, create_activity, delete_activities_by_day
 from models.preferences import get_preferences_by_user, create_preferences, update_preferences
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
-
+from agent import run_agent
 
 app = Flask(__name__)
 CORS(app)
-llm = ChatOllama(model="llama3")
 
 
 
@@ -272,7 +270,7 @@ def destinations():
 
 @app.route('/destinations/<int:destination_id>', methods=['GET'])
 def destination(destination_id):
-    dest = get_destination_id(destination_id)
+    dest = get_destination_by_id(destination_id)
     if not dest:
         return jsonify({"error": "Destination not found"}), 404
     return jsonify(dest), 200
@@ -295,16 +293,31 @@ def new_destination():
     )
     return jsonify({"message": "Destination created", "destination_id": new_id}), 201
 
-@app.route("/chat", methods=["POST"])
+@app.route('/chat', methods=['POST'])
 def chat():
-    data = request.json
+    data       = request.get_json()
+    session_id = data.get('session_id')
+    user_id    = data.get('user_id')
+    message    = data.get('message')
 
-    response = llm.invoke(data["message"])
+    if not session_id or not message:
+        return jsonify({"error": "session_id and message are required"}), 400
 
-    return jsonify({
-        "reply": response.content
-    })
+    try:
+        create_message(session_id, 'user', message)
+        history   = get_messages_by_session(session_id)
+        bot_reply = run_agent(message, history)
+        create_message(session_id, 'bot', bot_reply)
+        return jsonify({
+            "user_message": message,
+            "bot_reply"   : bot_reply
+        }), 200
 
+    except Exception as e:
+        print("❌ CHAT ERROR:", str(e))          # ← shows in terminal
+        import traceback
+        traceback.print_exc()                    # ← shows full error
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     print("Connecting to database...")
