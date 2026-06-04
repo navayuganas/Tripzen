@@ -46,3 +46,13 @@ async function getMessages(session_id) {
     const response = await fetch(`${BASE_URL}/messages/${session_id}`);
     return await response.json();
 } 
+
+async function chatWithBot(message) {
+    const response = await fetch(`${BASE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+    });
+    const data = await response.json();
+    return data.reply;
+}

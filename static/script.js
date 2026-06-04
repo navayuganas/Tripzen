@@ -116,20 +116,26 @@ async function handleSendMessage() {
     chatbox.scrollTop = chatbox.scrollHeight;
 
     // TODO: replace this with real AI response later
-    setTimeout(async () => {
-        const botReply = 'Hello';
+   try {
+        // calls /chat → LangChain → Ollama llama3
+        const data = await chatWithAI(
+            currentSessionId,
+            currentUserId,
+            text
+        );
 
         // remove typing indicator
         document.getElementById('typing')?.remove();
 
-        // show bot reply in UI
-        addMessageToUI('bot', botReply);
+        // show AI reply in UI
+        addMessageToUI('bot', data.bot_reply);
 
-        // save bot reply to backend
-        await sendMessage(currentSessionId, 'bot', botReply);
-    }, 1000);
+    } catch (error) {
+        document.getElementById('typing')?.remove();
+        addMessageToUI('bot', 'Something went wrong. Please try again.');
+        console.error(error);
+    }
 }
-
 newChatBtn.addEventListener('click', async () => {
     currentSessionId = null;
     localStorage.removeItem('session_id');
