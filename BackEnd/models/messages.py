@@ -1,4 +1,3 @@
-# models/messages.py
 from db import get_db_connection
 
 def get_messages_by_session(session_id):

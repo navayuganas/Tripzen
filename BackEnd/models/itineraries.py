@@ -1,4 +1,3 @@
-# models/itineraries.py
 from db import get_db_connection
 
 def get_itineraries_by_user(user_id):

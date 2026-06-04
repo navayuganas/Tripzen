@@ -12,7 +12,6 @@ CREATE TABLE chat_sessions (
     user_id BIGINT,
     title VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -29,11 +28,8 @@ CREATE TABLE itineraries (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     session_id BIGINT,
     user_id BIGINT,
-
     title VARCHAR(255),
-
     destination VARCHAR(255),
-
     start_date DATE,
     end_date DATE,
 
