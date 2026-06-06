@@ -10,9 +10,10 @@ from models.activities import create_activity
 # Ollama Model
 # ─────────────────────────────────────────
 llm = ChatOllama(
-    model="llama3.2",
+    model="qwen2.5:3b", 
     base_url="http://localhost:11434",
-    temperature=0.7
+    temperature=0.7,
+    num_predict=2048
 )
 
 # ─────────────────────────────────────────
