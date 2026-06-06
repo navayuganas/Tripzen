@@ -1,4 +1,3 @@
-# models/chat_sessions.py
 from db import get_db_connection
 
 def get_sessions_by_user(user_id):

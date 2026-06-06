@@ -45,14 +45,21 @@ async function sendMessage(session_id, sender, message) {
 async function getMessages(session_id) {
     const response = await fetch(`${BASE_URL}/messages/${session_id}`);
     return await response.json();
-} 
 
-async function chatWithBot(message) {
+    async function chatWithAI(session_id, user_id, message) {
     const response = await fetch(`${BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message })
+        body: JSON.stringify({ session_id, user_id, message })
     });
-    const data = await response.json();
-    return data.reply;
+    return await response.json();
+}
+} 
+async function chatWithAI(session_id, user_id, message) {
+    const response = await fetch(`${BASE_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id, user_id, message })
+    });
+    return await response.json();
 }
