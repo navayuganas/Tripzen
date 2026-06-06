@@ -1,3 +1,4 @@
+# agent.py
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from models.destinations import get_all_destinations, search_destinations
@@ -11,7 +12,8 @@ from models.activities import create_activity
 llm = ChatOllama(
     model="qwen2.5:3b", 
     base_url="http://localhost:11434",
-    temperature=0.7
+    temperature=0.7,
+    num_predict=2048
 )
 
 # ─────────────────────────────────────────
