@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from db import get_db_connection
+from db import save_message, get_history, get_user_history
 
 
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
@@ -304,19 +305,30 @@ def chat():
         return jsonify({"error": "session_id and message are required"}), 400
 
     try:
-        create_message(session_id, 'user', message)
-        history   = get_messages_by_session(session_id)
+        # Step 1: Save user message
+        save_message(session_id, 'user', message)
+
+        # Step 2: Long Term Memory — fetch ALL user history
+        if user_id:
+            history = get_user_history(user_id, limit=30)
+        else:
+            history = get_history(session_id, limit=10)
+
+        # Step 3: Send to Qwen
         bot_reply = run_agent(message, history)
-        create_message(session_id, 'bot', bot_reply)
+
+        # Step 4: Save bot reply
+        save_message(session_id, 'bot', bot_reply)
+
         return jsonify({
             "user_message": message,
             "bot_reply"   : bot_reply
         }), 200
 
     except Exception as e:
-        print("❌ CHAT ERROR:", str(e))          # ← shows in terminal
+        print("❌ CHAT ERROR:", str(e))
         import traceback
-        traceback.print_exc()                    # ← shows full error
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
