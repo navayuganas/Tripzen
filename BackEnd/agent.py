@@ -6,9 +6,6 @@ from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
 from models.activities import create_activity
 
-# ─────────────────────────────────────────
-# Ollama Model
-# ─────────────────────────────────────────
 llm = ChatOllama(
     model="qwen2.5:3b", 
     base_url="http://localhost:11434",
@@ -16,9 +13,6 @@ llm = ChatOllama(
     num_predict=2048
 )
 
-# ─────────────────────────────────────────
-# Helper — get destinations from DB
-# ─────────────────────────────────────────
 def get_destinations_context():
     destinations = get_all_destinations()
     if not destinations:
@@ -33,9 +27,6 @@ def get_destinations_context():
         )
     return "\n".join(lines)
 
-# ─────────────────────────────────────────
-# MAIN FUNCTION
-# ─────────────────────────────────────────
 def run_agent(user_message, conversation_history):
 
     # get destinations from DB and inject into prompt
@@ -72,7 +63,6 @@ When planning a trip always:
     # add current message
     messages.append(HumanMessage(content=user_message))
 
-    # get response from llama3.2
     response = llm.invoke(messages)
 
     # auto save itinerary if user asked for a trip plan

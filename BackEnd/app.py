@@ -16,8 +16,6 @@ from agent import run_agent
 app = Flask(__name__)
 CORS(app)
 
-
-
 @app.route('/getTable', methods=['GET'])
 def get_tables():
     try:
