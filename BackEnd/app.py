@@ -1,9 +1,9 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from db import get_db_connection
-from db import save_message, get_history, get_user_history
+from google import genai
+from google.genai import types
 
-
+# Models
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
 from models.chat_sessions import get_sessions_by_user, get_session_by_id, create_session, delete_session
 from models.messages import get_messages_by_session, create_message, delete_messages_by_session
@@ -12,25 +12,47 @@ from models.itinerary_day import get_days_by_itinerary, create_day, delete_days_
 from models.activities import get_activities_by_day, create_activity, delete_activities_by_day
 from models.preferences import get_preferences_by_user, create_preferences, update_preferences
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
-from agent import run_agent
 
 app = Flask(__name__)
 CORS(app)
 
-@app.route('/getTable', methods=['GET'])
-def get_tables():
-    try:
-        con = get_db_connection()
-        cursor = con.cursor()
-        cursor.execute("SHOW TABLES")
-        tables = cursor.fetchall()
-        cursor.close()
-        con.close()
-        table_names = [table[0] for table in tables]
-        return jsonify({"tables": table_names}), 200
-    except mysql.connector.Error as e:
-        return jsonify({"error": str(e)}), 500
-    
+# ─────────────────────────────────────────
+# GEMINI SETUP
+# ─────────────────────────────────────────
+client = genai.Client(api_key="AQ.Ab8RN6KHfSxWamNnCiFyeQSb7wddwE4IDTui5QMNDopImAndaA")  # ← paste your key here
+
+SYSTEM_INSTRUCTION = """You are a helpful travel assistant chatbot.
+Help users plan trips, suggest destinations, create itineraries,
+recommend hotels, activities, and give travel tips.
+Keep responses friendly, concise and helpful.
+
+When planning a trip ALWAYS format response EXACTLY like this:
+
+ITINERARY: [Title]
+DESTINATION: [City, Country]
+DURATION: [X days]
+BUDGET: $[total amount]
+TRAVELERS: [number]
+TRIP_TYPE: [leisure/adventure/business]
+SUMMARY: [2-3 line summary]
+
+DAY 1: [Day Title]
+HOTEL: [Hotel name]
+TRANSPORT: [Transport mode]
+COST: $[estimated cost]
+DESCRIPTION: [Day description]
+ACTIVITIES:
+- [Activity name] | [Location] | [Time] | $[cost] | [notes]
+- [Activity name] | [Location] | [Time] | $[cost] | [notes]
+
+DAY 2: [Day Title]
+...and so on"""
+
+
+# ─────────────────────────────────────────
+# USERS
+# ─────────────────────────────────────────
+
 @app.route('/users', methods=['GET'])
 def users():
     return jsonify(get_all_users()), 200
@@ -44,7 +66,7 @@ def user(user_id):
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.get_json()
+    data      = request.get_json()
     full_name = data.get('full_name')
     email     = data.get('email')
     phone     = data.get('phone')
@@ -76,7 +98,12 @@ def login():
     if user['password_hash'] != password:
         return jsonify({"error": "Wrong password"}), 401
 
-    return jsonify({"message": "Login successful", "user_id": user['id']}), 200
+    return jsonify({
+        "message": "Login successful",
+        "user_id": user['id'],
+        "full_name": user['full_name'],
+        "email": user['email']
+    }), 200
 
 @app.route('/users/<int:user_id>', methods=['DELETE'])
 def remove_user(user_id):
@@ -85,6 +112,11 @@ def remove_user(user_id):
         return jsonify({"error": "User not found"}), 404
     delete_user(user_id)
     return jsonify({"message": "User deleted"}), 200
+
+
+# ─────────────────────────────────────────
+# CHAT SESSIONS
+# ─────────────────────────────────────────
 
 @app.route('/sessions/<int:user_id>', methods=['GET'])
 def sessions(user_id):
@@ -99,9 +131,9 @@ def session_details(session_id):
 
 @app.route('/sessions', methods=['POST'])
 def new_session():
-    data     = request.get_json()
-    user_id  = data.get('user_id')
-    title    = data.get('title')
+    data    = request.get_json()
+    user_id = data.get('user_id')
+    title   = data.get('title')
 
     if not user_id or not title:
         return jsonify({"error": "user_id and title are required"}), 400
@@ -117,6 +149,11 @@ def remove_session(session_id):
     delete_session(session_id)
     return jsonify({"message": "Session deleted"}), 200
 
+
+# ─────────────────────────────────────────
+# MESSAGES + GEMINI
+# ─────────────────────────────────────────
+
 @app.route('/messages/<int:session_id>', methods=['GET'])
 def messages(session_id):
     return jsonify(get_messages_by_session(session_id)), 200
@@ -127,6 +164,7 @@ def new_message():
     session_id = data.get('session_id')
     sender     = data.get('sender')
     message    = data.get('message')
+    user_id    = data.get('user_id')
 
     if not session_id or not sender or not message:
         return jsonify({"error": "session_id, sender and message are required"}), 400
@@ -134,13 +172,47 @@ def new_message():
     if sender not in ['user', 'bot']:
         return jsonify({"error": "sender must be 'user' or 'bot'"}), 400
 
+    # Save user message to DB
     new_id = create_message(session_id, sender, message)
-    return jsonify({"message": "Message saved", "message_id": new_id}), 201
+
+    bot_reply = None
+    if sender == 'user':
+        try:
+            from agent import run_agent
+
+            # Fetch conversation history
+            history = get_messages_by_session(session_id)
+            history_list = [
+                {"sender": m["sender"], "message": m["message"]}
+                for m in history[:-1]
+            ]
+
+            # Run agent
+            bot_reply = run_agent(message, history_list, session_id, user_id)
+
+            # Save bot reply to DB
+            create_message(session_id, 'bot', bot_reply)
+
+        except Exception as e:
+            print("GEMINI ERROR:", str(e))
+            bot_reply = f"Error: {str(e)}"
+            create_message(session_id, 'bot', bot_reply)
+
+    return jsonify({
+        "message": "Message saved",
+        "message_id": new_id,
+        "bot_reply": bot_reply
+    }), 201
 
 @app.route('/messages/<int:session_id>', methods=['DELETE'])
 def remove_messages(session_id):
     delete_messages_by_session(session_id)
     return jsonify({"message": "Messages deleted"}), 200
+
+
+# ─────────────────────────────────────────
+# ITINERARIES
+# ─────────────────────────────────────────
 
 @app.route('/itineraries/<int:user_id>', methods=['GET'])
 def itineraries(user_id):
@@ -185,6 +257,11 @@ def remove_itinerary(itinerary_id):
     delete_itinerary(itinerary_id)
     return jsonify({"message": "Itinerary deleted"}), 200
 
+
+# ─────────────────────────────────────────
+# ITINERARY DAYS
+# ─────────────────────────────────────────
+
 @app.route('/itinerary/<int:itinerary_id>/days', methods=['GET'])
 def itinerary_days(itinerary_id):
     return jsonify(get_days_by_itinerary(itinerary_id)), 200
@@ -208,6 +285,11 @@ def remove_days(itinerary_id):
     delete_days_by_itinerary(itinerary_id)
     return jsonify({"message": "Days deleted"}), 200
 
+
+# ─────────────────────────────────────────
+# ACTIVITIES
+# ─────────────────────────────────────────
+
 @app.route('/activities/<int:itinerary_day_id>', methods=['GET'])
 def activities(itinerary_day_id):
     return jsonify(get_activities_by_day(itinerary_day_id)), 200
@@ -229,6 +311,11 @@ def new_activity():
 def remove_activities(itinerary_day_id):
     delete_activities_by_day(itinerary_day_id)
     return jsonify({"message": "Activities deleted"}), 200
+
+
+# ─────────────────────────────────────────
+# PREFERENCES
+# ─────────────────────────────────────────
 
 @app.route('/preferences/<int:user_id>', methods=['GET'])
 def preferences(user_id):
@@ -263,13 +350,18 @@ def edit_preferences(user_id):
     )
     return jsonify({"message": "Preferences updated"}), 200
 
+
+# ─────────────────────────────────────────
+# DESTINATIONS
+# ─────────────────────────────────────────
+
 @app.route('/destinations', methods=['GET'])
 def destinations():
     return jsonify(get_all_destinations()), 200
 
 @app.route('/destinations/<int:destination_id>', methods=['GET'])
 def destination(destination_id):
-    dest = get_destination_by_id(destination_id)
+    dest = get_destination_id(destination_id)
     if not dest:
         return jsonify({"error": "Destination not found"}), 404
     return jsonify(dest), 200
@@ -292,43 +384,23 @@ def new_destination():
     )
     return jsonify({"message": "Destination created", "destination_id": new_id}), 201
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    data       = request.get_json()
-    session_id = data.get('session_id')
-    user_id    = data.get('user_id')
-    message    = data.get('message')
 
-    if not session_id or not message:
-        return jsonify({"error": "session_id and message are required"}), 400
+# ─────────────────────────────────────────
+# DEBUG — list available models
+# ─────────────────────────────────────────
 
-    try:
-        # Step 1: Save user message
-        save_message(session_id, 'user', message)
+@app.route('/models', methods=['GET'])
+def list_models():
+    models = client.models.list()
+    available = [m.name for m in models]
+    return jsonify(available), 200
 
-        # Step 2: Long Term Memory — fetch ALL user history
-        if user_id:
-            history = get_user_history(user_id, limit=30)
-        else:
-            history = get_history(session_id, limit=10)
 
-        # Step 3: Send to Qwen
-        bot_reply = run_agent(message, history)
-
-        # Step 4: Save bot reply
-        save_message(session_id, 'bot', bot_reply)
-
-        return jsonify({
-            "user_message": message,
-            "bot_reply"   : bot_reply
-        }), 200
-
-    except Exception as e:
-        print("❌ CHAT ERROR:", str(e))
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+# ─────────────────────────────────────────
+# RUN
+# ─────────────────────────────────────────
 
 if __name__ == "__main__":
     print("Connecting to database...")
+    print("Gemini AI ready!")
     app.run(debug=True)
