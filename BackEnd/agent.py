@@ -1,6 +1,5 @@
 # agent.py
-from google import genai
-from google.genai import types
+import requests
 from models.destinations import get_all_destinations
 from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
@@ -8,10 +7,8 @@ from models.activities import create_activity
 import re
 from datetime import date, timedelta
 
-# ─────────────────────────────────────────
-# Gemini Setup
-# ─────────────────────────────────────────
-client = genai.Client(api_key="AQ.Ab8RN6KHfSxWamNnCiFyeQSb7wddwE4IDTui5QMNDopImAndaA")  # ← same key as app.py
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "gemma4:31b-cloud"
 
 SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant.
 You help users with:
@@ -37,81 +34,76 @@ COST: $[estimated cost]
 DESCRIPTION: [Day description]
 ACTIVITIES:
 - [Activity name] | [Location] | [Time] | $[cost] | [notes]
-- [Activity name] | [Location] | [Time] | $[cost] | [notes]
 
 DAY 2: [Day Title]
 ...and so on
 
-Always be friendly, helpful and detailed."""
+Always be friendly, helpful and detailed.
+Keep responses concise."""
 
-# ─────────────────────────────────────────
-# Get destinations from DB
-# ─────────────────────────────────────────
+
 def get_destinations_context():
     destinations = get_all_destinations()
     if not destinations:
-        return "No destinations available."
+        return ""
     lines = []
     for d in destinations:
         lines.append(
             f"- {d['city']}, {d['country']} | "
             f"Budget: ${d['avg_budget_per_day']}/day | "
-            f"Best Season: {d['best_season']} | "
-            f"{d['description']}"
+            f"Best Season: {d['best_season']}"
         )
     return "\n".join(lines)
 
-# ─────────────────────────────────────────
-# MAIN FUNCTION
-# ─────────────────────────────────────────
+
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
 
-    destinations_context = get_destinations_context()
-
-    # detect intent
     wants_itinerary = any(w in user_message.lower() for w in
                           ["plan", "trip", "itinerary", "travel", "visit", "tour"])
 
-    # build conversation history for Gemini
-    chat_history = []
-    for msg in conversation_history:
-        role = "user" if msg["sender"] == "user" else "model"
-        chat_history.append(
-            types.Content(
-                role=role,
-                parts=[types.Part(text=msg["message"])]
-            )
-        )
+    # build messages
+    messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
 
-    # build full message with destinations context
-    full_message = f"""
-Available destinations in our database:
-{destinations_context}
+    # only last 10 messages
+    for msg in conversation_history[-10:]:
+        role = "user" if msg["sender"] == "user" else "assistant"
+        messages.append({"role": role, "content": msg["message"]})
 
-User message: {user_message}
-"""
+    # only add destinations on first message
+    if len(conversation_history) == 0:
+        destinations_context = get_destinations_context()
+        if destinations_context:
+            full_message = f"Available destinations:\n{destinations_context}\n\nUser: {user_message}"
+        else:
+            full_message = user_message
+    else:
+        full_message = user_message
 
-    # add current message to history
-    chat_history.append(
-        types.Content(
-            role="user",
-            parts=[types.Part(text=full_message)]
-        )
-    )
+    messages.append({"role": "user", "content": full_message})
 
-    # send to Gemini
-    print("🤖 Gemini 2.5 Flash thinking...")
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=chat_history,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION
-        )
-    )
-    reply = response.text
+    print(f"🤖 {MODEL} thinking...")
+    response = requests.post(OLLAMA_URL, json={
+        "model": MODEL,
+        "messages": messages,
+        "stream": False,
+        "options": {
+            "num_predict": 1024,
+            "temperature": 0.7
+        }
+    })
+
+    # handle response safely
+    result = response.json()
+    print("RAW RESPONSE:", result)  # ← shows full response in terminal
+
+    if "message" in result:
+        reply = result["message"]["content"]
+    elif "error" in result:
+        reply = f"Error from Ollama: {result['error']}"
+    else:
+        reply = str(result)
     print("✅ Response received")
 
-    # save itinerary to DB if needed
     if wants_itinerary and session_id and user_id:
         try:
             save_itinerary_to_db(reply, session_id, user_id)
@@ -120,9 +112,7 @@ User message: {user_message}
 
     return reply
 
-# ─────────────────────────────────────────
-# Save itinerary to DB
-# ─────────────────────────────────────────
+
 def save_itinerary_to_db(ai_response, session_id, user_id):
     print("💾 Saving itinerary to DB...")
 
@@ -148,7 +138,6 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
     )
     print(f"✅ Itinerary saved: ID {itinerary_id}")
 
-    # save days
     day_blocks = re.split(r'DAY \d+:', ai_response)
     for i, block in enumerate(day_blocks[1:], start=1):
         lines       = block.strip().split('\n')
@@ -165,7 +154,6 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
         )
         print(f"✅ Day {i} saved: ID {day_id}")
 
-        # save activities
         activity_section = re.search(r'ACTIVITIES:(.*?)(?=DAY \d+:|$)', block, re.DOTALL)
         if activity_section:
             for line in activity_section.group(1).strip().split('\n'):
@@ -183,9 +171,7 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
                     )
     print("✅ Full itinerary saved to DB!")
 
-# ─────────────────────────────────────────
-# Helper
-# ─────────────────────────────────────────
+
 def extract(text, field):
     match = re.search(rf'{field}:\s*(.+)', text)
     return match.group(1).strip() if match else ''
