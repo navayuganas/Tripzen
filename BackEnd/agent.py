@@ -17,7 +17,7 @@ os.environ["OLLAMA_API_KEY"] = "4d877094e2724901ad62b12d812634c9.vMGJhg4Q26CxeDn
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "gemma4:31b-cloud"
 
-SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant named TravelBot.
+SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant named TripZen.
 
 You ALWAYS follow this ReAct thinking process before responding:
 
