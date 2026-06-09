@@ -32,34 +32,17 @@ async function getSessions(user_id) {
     return await response.json();
 }
 
-
 async function sendMessage(session_id, sender, message) {
+    const user_id = localStorage.getItem('user_id');
     const response = await fetch(`${BASE_URL}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id, sender, message })
+        body: JSON.stringify({ session_id, sender, message, user_id })
     });
     return await response.json();
 }
 
 async function getMessages(session_id) {
     const response = await fetch(`${BASE_URL}/messages/${session_id}`);
-    return await response.json();
-
-    async function chatWithAI(session_id, user_id, message) {
-    const response = await fetch(`${BASE_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id, user_id, message })
-    });
-    return await response.json();
-}
-} 
-async function chatWithAI(session_id, user_id, message) {
-    const response = await fetch(`${BASE_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id, user_id, message })
-    });
     return await response.json();
 }

@@ -9,24 +9,24 @@ const chatbox       = document.getElementById('chatbox');
 const msgInput      = document.getElementById('msgInput');
 const sendBtn       = document.getElementById('sendBtn');
 
+// ─────────────────────────────────────────
+// State
+// ─────────────────────────────────────────
+let currentUserId    = localStorage.getItem('user_id');
+let currentSessionId = localStorage.getItem('session_id');
 
-let currentUserId   = localStorage.getItem('user_id');    // logged in user
-let currentSessionId= localStorage.getItem('session_id'); // current chat session
-
+// ─────────────────────────────────────────
+// On page load
+// ─────────────────────────────────────────
 window.addEventListener('load', async () => {
     if (!currentUserId) {
-        // no user logged in — show default message
         addMessageToUI('bot', 'Hello! Please register or login to start chatting.');
         return;
     }
 
-    // update profile in sidebar
     updateProfile();
-
-    // load previous sessions in sidebar
     await loadSessions();
 
-    // if existing session — load its messages
     if (currentSessionId) {
         await loadMessages(currentSessionId);
     } else {
@@ -35,42 +35,55 @@ window.addEventListener('load', async () => {
 });
 
 async function loadSessions() {
-    const sessions = await getSessions(currentUserId);
-    const recentList = document.getElementById('recentList');
-    recentList.innerHTML = '';
+    try {
+        const sessions = await getSessions(currentUserId);
+        const recentList = document.getElementById('recentList');
+        recentList.innerHTML = '';
 
-    sessions.forEach(session => {
-        const item = document.createElement('div');
-        item.className = 'chat-item';
-        item.innerHTML = `<i class="ti ti-message"></i><span>${session.title}</span>`;
+        sessions.forEach(session => {
+            const item = document.createElement('div');
+            item.className = 'chat-item';
+            item.innerHTML = `<i class="ti ti-message"></i><span>${session.title}</span>`;
 
-        item.addEventListener('click', async () => {
-            // switch to this session
-            currentSessionId = session.id;
-            localStorage.setItem('session_id', session.id);
-            chatbox.innerHTML = '';
-            await loadMessages(session.id);
+            item.addEventListener('click', async () => {
+                currentSessionId = session.id;
+                localStorage.setItem('session_id', session.id);
+                chatbox.innerHTML = '';
+                await loadMessages(session.id);
 
-            document.querySelectorAll('.chat-item')
-                    .forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
+                document.querySelectorAll('.chat-item')
+                        .forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            });
+
+            recentList.appendChild(item);
+        });
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+    }
+}
+
+// ─────────────────────────────────────────
+// Load messages for a session
+// ─────────────────────────────────────────
+async function loadMessages(session_id) {
+    try {
+        const messages = await getMessages(session_id);
+        chatbox.innerHTML = '';
+
+        messages.forEach(msg => {
+            addMessageToUI(msg.sender, msg.message);
         });
 
-        recentList.appendChild(item);
-    });
+        chatbox.scrollTop = chatbox.scrollHeight;
+    } catch (error) {
+        console.error('Error loading messages:', error);
+    }
 }
 
-async function loadMessages(session_id) {
-    const messages = await getMessages(session_id);
-    chatbox.innerHTML = '';
-
-    messages.forEach(msg => {
-        addMessageToUI(msg.sender, msg.message);
-    });
-
-    chatbox.scrollTop = chatbox.scrollHeight;
-}
-
+// ─────────────────────────────────────────
+// Add message bubble to UI
+// ─────────────────────────────────────────
 function addMessageToUI(sender, text) {
     const div = document.createElement('div');
     div.className = `message ${sender === 'user' ? 'user' : ''}`;
@@ -79,6 +92,9 @@ function addMessageToUI(sender, text) {
     chatbox.scrollTop = chatbox.scrollHeight;
 }
 
+// ─────────────────────────────────────────
+// Send message
+// ─────────────────────────────────────────
 async function handleSendMessage() {
     const text = msgInput.value.trim();
     if (!text) return;
@@ -98,14 +114,17 @@ async function handleSendMessage() {
 
     // if no session — create one
     if (!currentSessionId) {
-        const session = await createSession(currentUserId, text.slice(0, 50));
-        currentSessionId = session.session_id;
-        localStorage.setItem('session_id', currentSessionId);
-        await loadSessions();
+        try {
+            const session = await createSession(currentUserId, text.slice(0, 50));
+            currentSessionId = session.session_id;
+            localStorage.setItem('session_id', currentSessionId);
+            await loadSessions();
+        } catch (error) {
+            console.error('Error creating session:', error);
+            addMessageToUI('bot', 'Failed to create session. Please try again.');
+            return;
+        }
     }
-
-    // save user message to backend
-    await sendMessage(currentSessionId, 'user', text);
 
     // show typing indicator
     const typing = document.createElement('div');
@@ -115,27 +134,30 @@ async function handleSendMessage() {
     chatbox.appendChild(typing);
     chatbox.scrollTop = chatbox.scrollHeight;
 
-    // TODO: replace this with real AI response later
-   try {
-        // calls /chat → LangChain → Ollama llama3
-        const data = await chatWithAI(
-            currentSessionId,
-            currentUserId,
-            text
-        );
+    try {
+        // send message to Flask → Gemini 2.5 Flash
+        const data = await sendMessage(currentSessionId, 'user', text);
 
         // remove typing indicator
         document.getElementById('typing')?.remove();
 
-        // show AI reply in UI
-        addMessageToUI('bot', data.bot_reply);
+        // show Gemini reply in UI
+        if (data.bot_reply) {
+            addMessageToUI('bot', data.bot_reply);
+        } else {
+            addMessageToUI('bot', 'Something went wrong. Please try again.');
+        }
 
     } catch (error) {
         document.getElementById('typing')?.remove();
         addMessageToUI('bot', 'Something went wrong. Please try again.');
-        console.error(error);
+        console.error('Error sending message:', error);
     }
 }
+
+// ─────────────────────────────────────────
+// New chat button
+// ─────────────────────────────────────────
 newChatBtn.addEventListener('click', async () => {
     currentSessionId = null;
     localStorage.removeItem('session_id');
@@ -144,6 +166,9 @@ newChatBtn.addEventListener('click', async () => {
     msgInput.focus();
 });
 
+// ─────────────────────────────────────────
+// Send button and Enter key
+// ─────────────────────────────────────────
 sendBtn.addEventListener('click', handleSendMessage);
 
 msgInput.addEventListener('keydown', e => {
@@ -153,15 +178,24 @@ msgInput.addEventListener('keydown', e => {
     }
 });
 
+// ─────────────────────────────────────────
+// Auto resize textarea
+// ─────────────────────────────────────────
 msgInput.addEventListener('input', () => {
     msgInput.style.height = 'auto';
     msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
 });
 
+// ─────────────────────────────────────────
+// Sidebar toggle
+// ─────────────────────────────────────────
 toggleBtn.addEventListener('click', () => {
     sidebar.classList.toggle('collapsed');
 });
 
+// ─────────────────────────────────────────
+// Search
+// ─────────────────────────────────────────
 searchInput.addEventListener('input', () => {
     const q = searchInput.value.trim().toLowerCase();
     if (!q) {
@@ -180,12 +214,18 @@ searchInput.addEventListener('input', () => {
         : '<div class="no-results">No chats found</div>';
 });
 
+// ─────────────────────────────────────────
+// Collapsible sidebar sections
+// ─────────────────────────────────────────
 document.querySelectorAll('.sidebar-section').forEach(section => {
     section.querySelector('.collapsible').addEventListener('click', () => {
         section.classList.toggle('closed');
     });
 });
 
+// ─────────────────────────────────────────
+// Update profile in sidebar
+// ─────────────────────────────────────────
 function updateProfile() {
     const name  = localStorage.getItem('full_name') || 'Your Name';
     const email = localStorage.getItem('email') || 'you@example.com';
