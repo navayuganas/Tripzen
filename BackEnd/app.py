@@ -1,7 +1,5 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from google import genai
-from google.genai import types
 
 # Models
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
@@ -15,38 +13,6 @@ from models.destinations import get_all_destinations, get_destination_id, search
 
 app = Flask(__name__)
 CORS(app)
-
-# ─────────────────────────────────────────
-# GEMINI SETUP
-# ─────────────────────────────────────────
-client = genai.Client(api_key="AQ.Ab8RN6IQljuHx53cq2YKRgb_K0RXmfrSlver9oOjwhnqVF_kvQ")  # ← paste your key here
-
-SYSTEM_INSTRUCTION = """You are a helpful travel assistant chatbot.
-Help users plan trips, suggest destinations, create itineraries,
-recommend hotels, activities, and give travel tips.
-Keep responses friendly, concise and helpful.
-
-When planning a trip ALWAYS format response EXACTLY like this:
-
-ITINERARY: [Title]
-DESTINATION: [City, Country]
-DURATION: [X days]
-BUDGET: $[total amount]
-TRAVELERS: [number]
-TRIP_TYPE: [leisure/adventure/business]
-SUMMARY: [2-3 line summary]
-
-DAY 1: [Day Title]
-HOTEL: [Hotel name]
-TRANSPORT: [Transport mode]
-COST: $[estimated cost]
-DESCRIPTION: [Day description]
-ACTIVITIES:
-- [Activity name] | [Location] | [Time] | $[cost] | [notes]
-- [Activity name] | [Location] | [Time] | $[cost] | [notes]
-
-DAY 2: [Day Title]
-...and so on"""
 
 
 # ─────────────────────────────────────────
@@ -151,7 +117,7 @@ def remove_session(session_id):
 
 
 # ─────────────────────────────────────────
-# MESSAGES + GEMINI
+# MESSAGES + AI AGENT
 # ─────────────────────────────────────────
 
 @app.route('/messages/<int:session_id>', methods=['GET'])
@@ -194,7 +160,7 @@ def new_message():
             create_message(session_id, 'bot', bot_reply)
 
         except Exception as e:
-            print("GEMINI ERROR:", str(e))
+            print("AGENT ERROR:", str(e))
             bot_reply = f"Error: {str(e)}"
             create_message(session_id, 'bot', bot_reply)
 
@@ -386,21 +352,10 @@ def new_destination():
 
 
 # ─────────────────────────────────────────
-# DEBUG — list available models
-# ─────────────────────────────────────────
-
-@app.route('/models', methods=['GET'])
-def list_models():
-    models = client.models.list()
-    available = [m.name for m in models]
-    return jsonify(available), 200
-
-
-# ─────────────────────────────────────────
 # RUN
 # ─────────────────────────────────────────
 
 if __name__ == "__main__":
     print("Connecting to database...")
-    print("Gemini AI ready!")
+    print("AI Agent ready!")
     app.run(debug=True)
