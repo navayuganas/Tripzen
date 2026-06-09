@@ -7,6 +7,7 @@ from models.destinations import get_all_destinations
 from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
 from models.activities import create_activity
+from ddgs import DDGS
 
 # ─────────────────────────────────────────
 # Ollama Cloud Setup
@@ -64,9 +65,26 @@ ACTIVITIES:
 DAY 2: [Day Title]
 ...and so on
 """
+def search_web(query):
+    try:
+        print(f"🔍 Searching: {query}")
+        results = DDGS().text(query, max_results=3)
+        print(f"📄 Search results: {results}")
+        if not results:
+            return ""
+        lines = []
+        for r in results:
+            lines.append(f"- {r['title']}: {r['body']}")
+        context = "\n".join(lines)
+        print("✅ Search done")
+        return context
+    except Exception as e:
+        print(f"⚠️ Search failed: {str(e)}")
+        return ""
+
 
 # ─────────────────────────────────────────
-# Get destinations from DB
+# Get Destinations from DB
 # ─────────────────────────────────────────
 def get_destinations_context():
     destinations = get_all_destinations()
@@ -86,56 +104,58 @@ def get_destinations_context():
 # Main Agent Function
 # ─────────────────────────────────────────
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
-    from db import get_user_history  # ← add this import
 
     wants_itinerary = any(w in user_message.lower() for w in
                           ["plan", "trip", "itinerary", "travel", "visit", "tour"])
 
-    # ── Build messages ──────────────────────────────────────────
+    needs_search = any(w in user_message.lower() for w in
+                       ["plan", "trip", "itinerary", "travel", "visit", "tour",
+                        "price", "cost", "visa", "weather", "best time",
+                        "hotel", "flight", "recommend", "suggest", "cheap"])
+    
+    print(f"📩 User message: {user_message}")        # ← ADD THIS
+    print(f"🔎 needs_search: {needs_search}")         # ← ADD THIS
+    print(f"🗺️ wants_itinerary: {wants_itinerary}")   # ← ADD THIS
+
+    # Build messages
     messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
 
-    # 1. LONG-TERM MEMORY — all past sessions of this user
-    if user_id:
-        past_messages = get_user_history(user_id, limit=30)
-        if past_messages:
-            memory_lines = []
-            for m in past_messages:
-                prefix = "User" if m["sender"] == "user" else "Bot"
-                memory_lines.append(f"{prefix}: {m['message']}")
-
-            messages.append({
-                "role": "system",
-                "content": (
-                    "This user's past conversation history across all sessions:\n\n"
-                    + "\n".join(memory_lines)
-                    + "\n\nUse this to remember their preferences and past trips."
-                )
-            })
-
-    # 2. CURRENT SESSION — last 10 messages (short-term)
+    # Only last 10 messages to save tokens
     for msg in conversation_history[-10:]:
         role = "user" if msg["sender"] == "user" else "assistant"
         messages.append({"role": role, "content": msg["message"]})
 
-    # 3. Destinations context on first message of session
+    # Build full message with context
+    context_parts = []
+
+    # Add destinations from DB on first message
     if len(conversation_history) == 0:
         destinations_context = get_destinations_context()
         if destinations_context:
-            full_message = f"Available destinations:\n{destinations_context}\n\nUser: {user_message}"
-        else:
-            full_message = user_message
+            context_parts.append(f"Available destinations in our database:\n{destinations_context}")
+
+    # Add web search results if needed
+    if needs_search:
+        web_context = search_web(f"{user_message} 2026")
+        if web_context:
+            context_parts.append(f"Latest web search results:\n{web_context}")
+
+    # Combine everything into the final message
+    if context_parts:
+        full_message = "\n\n".join(context_parts) + f"\n\nUser: {user_message}"
     else:
         full_message = user_message
 
     messages.append({"role": "user", "content": full_message})
 
-    print(f"🤖 {MODEL} thinking... (memory blocks: {len(messages)})")
+    print(f"🤖 {MODEL} thinking...")
 
-    # ── Call model ───────────────────────────────────────────────
     try:
         response = requests.post(
             OLLAMA_URL,
-            headers={"Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"},
+            headers={
+                "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
+            },
             json={
                 "model": MODEL,
                 "messages": messages,
@@ -165,7 +185,7 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
 
     print("✅ Response received")
 
-    # ── Save itinerary if needed ─────────────────────────────────
+    # Save itinerary to DB if needed
     if wants_itinerary and session_id and user_id and "Error" not in reply:
         try:
             save_itinerary_to_db(reply, session_id, user_id)
@@ -173,6 +193,7 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
             print("⚠️ Could not save itinerary:", str(e))
 
     return reply
+
 
 # ─────────────────────────────────────────
 # Save Itinerary to DB
