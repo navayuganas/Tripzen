@@ -1,17 +1,20 @@
 # agent.py
-from google import genai
-from google.genai import types
+import requests
+import os
+import re
+from datetime import date, timedelta
 from models.destinations import get_all_destinations
 from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
 from models.activities import create_activity
-import re
-from datetime import date, timedelta
 
 # ─────────────────────────────────────────
-# Gemini Setup
+# Ollama Cloud Setup
 # ─────────────────────────────────────────
-client = genai.Client(api_key="AQ.Ab8RN6Lek7MLYkn8ffIDvEDtYzVJYQTJB5Gq3eYMQcHP4qtbfw")  # ← same key as app.py
+os.environ["OLLAMA_API_KEY"] = "4d877094e2724901ad62b12d812634c9.vMGJhg4Q26CxeDnI4knZn090"  # ← paste your key here
+
+OLLAMA_URL = "http://localhost:11434/api/chat"
+MODEL = "gemma4:31b-cloud"
 
 SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant.
 You help users with:
@@ -37,12 +40,13 @@ COST: $[estimated cost]
 DESCRIPTION: [Day description]
 ACTIVITIES:
 - [Activity name] | [Location] | [Time] | $[cost] | [notes]
-- [Activity name] | [Location] | [Time] | $[cost] | [notes]
 
 DAY 2: [Day Title]
 ...and so on
 
-Always be friendly, helpful and detailed."""
+Always be friendly, helpful and detailed.
+Keep responses concise."""
+
 
 # ─────────────────────────────────────────
 # Get destinations from DB
@@ -50,69 +54,84 @@ Always be friendly, helpful and detailed."""
 def get_destinations_context():
     destinations = get_all_destinations()
     if not destinations:
-        return "No destinations available."
+        return ""
     lines = []
     for d in destinations:
         lines.append(
             f"- {d['city']}, {d['country']} | "
             f"Budget: ${d['avg_budget_per_day']}/day | "
-            f"Best Season: {d['best_season']} | "
-            f"{d['description']}"
+            f"Best Season: {d['best_season']}"
         )
     return "\n".join(lines)
 
+
 # ─────────────────────────────────────────
-# MAIN FUNCTION
+# Main Agent Function
 # ─────────────────────────────────────────
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
 
-    destinations_context = get_destinations_context()
-
-    # detect intent
     wants_itinerary = any(w in user_message.lower() for w in
                           ["plan", "trip", "itinerary", "travel", "visit", "tour"])
 
-    # build conversation history for Gemini
-    chat_history = []
-    for msg in conversation_history:
-        role = "user" if msg["sender"] == "user" else "model"
-        chat_history.append(
-            types.Content(
-                role=role,
-                parts=[types.Part(text=msg["message"])]
-            )
+    # Build messages
+    messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+
+    # Only last 10 messages to save tokens
+    for msg in conversation_history[-10:]:
+        role = "user" if msg["sender"] == "user" else "assistant"
+        messages.append({"role": role, "content": msg["message"]})
+
+    # Only send destinations context on first message
+    if len(conversation_history) == 0:
+        destinations_context = get_destinations_context()
+        if destinations_context:
+            full_message = f"Available destinations:\n{destinations_context}\n\nUser: {user_message}"
+        else:
+            full_message = user_message
+    else:
+        full_message = user_message
+
+    messages.append({"role": "user", "content": full_message})
+
+    print(f"🤖 {MODEL} thinking...")
+
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            headers={
+                "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
+            },
+            json={
+                "model": MODEL,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "num_predict": 1024,
+                    "temperature": 0.7
+                }
+            },
+            timeout=60  # 60 second timeout
         )
 
-    # build full message with destinations context
-    full_message = f"""
-Available destinations in our database:
-{destinations_context}
+        result = response.json()
+        print("RAW RESPONSE:", result)
 
-User message: {user_message}
-"""
+        if "message" in result:
+            reply = result["message"]["content"]
+        elif "error" in result:
+            reply = f"Error from Ollama: {result['error']}"
+        else:
+            reply = str(result)
 
-    # add current message to history
-    chat_history.append(
-        types.Content(
-            role="user",
-            parts=[types.Part(text=full_message)]
-        )
-    )
+    except requests.exceptions.Timeout:
+        reply = "Request timed out. Please try again."
+    except Exception as e:
+        reply = f"Error: {str(e)}"
 
-    # send to Gemini
-    print("🤖 Gemini 2.5 Flash thinking...")
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=chat_history,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION
-        )
-    )
-    reply = response.text
     print("✅ Response received")
 
-    # save itinerary to DB if needed
-    if wants_itinerary and session_id and user_id:
+    # Save itinerary to DB if needed
+    if wants_itinerary and session_id and user_id and "Error" not in reply:
         try:
             save_itinerary_to_db(reply, session_id, user_id)
         except Exception as e:
@@ -120,8 +139,9 @@ User message: {user_message}
 
     return reply
 
+
 # ─────────────────────────────────────────
-# Save itinerary to DB
+# Save Itinerary to DB
 # ─────────────────────────────────────────
 def save_itinerary_to_db(ai_response, session_id, user_id):
     print("💾 Saving itinerary to DB...")
@@ -129,7 +149,7 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
     title       = extract(ai_response, "ITINERARY") or "My Trip"
     destination = extract(ai_response, "DESTINATION")
     duration    = extract(ai_response, "DURATION")
-    budget      = extract(ai_response, "BUDGET").replace("$","").replace(",","")
+    budget      = extract(ai_response, "BUDGET").replace("$", "").replace(",", "")
     travelers   = extract(ai_response, "TRAVELERS")
     trip_type   = extract(ai_response, "TRIP_TYPE")
     summary     = extract(ai_response, "SUMMARY")
@@ -142,30 +162,30 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
     itinerary_id = create_itinerary(
         session_id, user_id, title, destination,
         str(start_date), str(end_date), total_days,
-        float(budget) if budget.replace('.','').isdigit() else 0,
+        float(budget) if budget.replace('.', '').isdigit() else 0,
         int(travelers) if travelers.isdigit() else 1,
         trip_type, summary
     )
     print(f"✅ Itinerary saved: ID {itinerary_id}")
 
-    # save days
+    # Save days
     day_blocks = re.split(r'DAY \d+:', ai_response)
     for i, block in enumerate(day_blocks[1:], start=1):
         lines       = block.strip().split('\n')
         day_title   = lines[0].strip() if lines else f"Day {i}"
         hotel       = extract(block, "HOTEL")
         transport   = extract(block, "TRANSPORT")
-        cost        = extract(block, "COST").replace("$","").replace(",","")
+        cost        = extract(block, "COST").replace("$", "").replace(",", "")
         description = extract(block, "DESCRIPTION")
 
         day_id = create_day(
             itinerary_id, i, day_title, description,
             hotel, transport,
-            float(cost) if cost.replace('.','').isdigit() else 0
+            float(cost) if cost.replace('.', '').isdigit() else 0
         )
         print(f"✅ Day {i} saved: ID {day_id}")
 
-        # save activities
+        # Save activities
         activity_section = re.search(r'ACTIVITIES:(.*?)(?=DAY \d+:|$)', block, re.DOTALL)
         if activity_section:
             for line in activity_section.group(1).strip().split('\n'):
@@ -177,11 +197,13 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
                         parts[0],
                         parts[1] if len(parts) > 1 else '',
                         parts[2] if len(parts) > 2 else '',
-                        float(parts[3].replace('$','').replace(',',''))
-                        if len(parts) > 3 and parts[3].replace('$','').replace(',','').replace('.','').isdigit() else 0,
+                        float(parts[3].replace('$', '').replace(',', ''))
+                        if len(parts) > 3 and parts[3].replace('$', '').replace(',', '').replace('.', '').isdigit() else 0,
                         parts[4] if len(parts) > 4 else ''
                     )
+
     print("✅ Full itinerary saved to DB!")
+
 
 # ─────────────────────────────────────────
 # Helper
