@@ -1,11 +1,17 @@
 # agent.py
 import requests
+import os
+import re
+from datetime import date, timedelta
 from models.destinations import get_all_destinations
 from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
 from models.activities import create_activity
-import re
-from datetime import date, timedelta
+
+# ─────────────────────────────────────────
+# Ollama Cloud Setup
+# ─────────────────────────────────────────
+os.environ["OLLAMA_API_KEY"] = "4d877094e2724901ad62b12d812634c9.vMGJhg4Q26CxeDnI4knZn090"  # ← paste your key here
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "gemma4:31b-cloud"
@@ -42,6 +48,9 @@ Always be friendly, helpful and detailed.
 Keep responses concise."""
 
 
+# ─────────────────────────────────────────
+# Get destinations from DB
+# ─────────────────────────────────────────
 def get_destinations_context():
     destinations = get_all_destinations()
     if not destinations:
@@ -56,20 +65,23 @@ def get_destinations_context():
     return "\n".join(lines)
 
 
+# ─────────────────────────────────────────
+# Main Agent Function
+# ─────────────────────────────────────────
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
 
     wants_itinerary = any(w in user_message.lower() for w in
                           ["plan", "trip", "itinerary", "travel", "visit", "tour"])
 
-    # build messages
+    # Build messages
     messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
 
-    # only last 10 messages
+    # Only last 10 messages to save tokens
     for msg in conversation_history[-10:]:
         role = "user" if msg["sender"] == "user" else "assistant"
         messages.append({"role": role, "content": msg["message"]})
 
-    # only add destinations on first message
+    # Only send destinations context on first message
     if len(conversation_history) == 0:
         destinations_context = get_destinations_context()
         if destinations_context:
@@ -82,29 +94,44 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
     messages.append({"role": "user", "content": full_message})
 
     print(f"🤖 {MODEL} thinking...")
-    response = requests.post(OLLAMA_URL, json={
-        "model": MODEL,
-        "messages": messages,
-        "stream": False,
-        "options": {
-            "num_predict": 1024,
-            "temperature": 0.7
-        }
-    })
 
-    # handle response safely
-    result = response.json()
-    print("RAW RESPONSE:", result)  # ← shows full response in terminal
+    try:
+        response = requests.post(
+            OLLAMA_URL,
+            headers={
+                "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
+            },
+            json={
+                "model": MODEL,
+                "messages": messages,
+                "stream": False,
+                "options": {
+                    "num_predict": 1024,
+                    "temperature": 0.7
+                }
+            },
+            timeout=60  # 60 second timeout
+        )
 
-    if "message" in result:
-        reply = result["message"]["content"]
-    elif "error" in result:
-        reply = f"Error from Ollama: {result['error']}"
-    else:
-        reply = str(result)
+        result = response.json()
+        print("RAW RESPONSE:", result)
+
+        if "message" in result:
+            reply = result["message"]["content"]
+        elif "error" in result:
+            reply = f"Error from Ollama: {result['error']}"
+        else:
+            reply = str(result)
+
+    except requests.exceptions.Timeout:
+        reply = "Request timed out. Please try again."
+    except Exception as e:
+        reply = f"Error: {str(e)}"
+
     print("✅ Response received")
 
-    if wants_itinerary and session_id and user_id:
+    # Save itinerary to DB if needed
+    if wants_itinerary and session_id and user_id and "Error" not in reply:
         try:
             save_itinerary_to_db(reply, session_id, user_id)
         except Exception as e:
@@ -113,13 +140,16 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
     return reply
 
 
+# ─────────────────────────────────────────
+# Save Itinerary to DB
+# ─────────────────────────────────────────
 def save_itinerary_to_db(ai_response, session_id, user_id):
     print("💾 Saving itinerary to DB...")
 
     title       = extract(ai_response, "ITINERARY") or "My Trip"
     destination = extract(ai_response, "DESTINATION")
     duration    = extract(ai_response, "DURATION")
-    budget      = extract(ai_response, "BUDGET").replace("$","").replace(",","")
+    budget      = extract(ai_response, "BUDGET").replace("$", "").replace(",", "")
     travelers   = extract(ai_response, "TRAVELERS")
     trip_type   = extract(ai_response, "TRIP_TYPE")
     summary     = extract(ai_response, "SUMMARY")
@@ -132,28 +162,30 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
     itinerary_id = create_itinerary(
         session_id, user_id, title, destination,
         str(start_date), str(end_date), total_days,
-        float(budget) if budget.replace('.','').isdigit() else 0,
+        float(budget) if budget.replace('.', '').isdigit() else 0,
         int(travelers) if travelers.isdigit() else 1,
         trip_type, summary
     )
     print(f"✅ Itinerary saved: ID {itinerary_id}")
 
+    # Save days
     day_blocks = re.split(r'DAY \d+:', ai_response)
     for i, block in enumerate(day_blocks[1:], start=1):
         lines       = block.strip().split('\n')
         day_title   = lines[0].strip() if lines else f"Day {i}"
         hotel       = extract(block, "HOTEL")
         transport   = extract(block, "TRANSPORT")
-        cost        = extract(block, "COST").replace("$","").replace(",","")
+        cost        = extract(block, "COST").replace("$", "").replace(",", "")
         description = extract(block, "DESCRIPTION")
 
         day_id = create_day(
             itinerary_id, i, day_title, description,
             hotel, transport,
-            float(cost) if cost.replace('.','').isdigit() else 0
+            float(cost) if cost.replace('.', '').isdigit() else 0
         )
         print(f"✅ Day {i} saved: ID {day_id}")
 
+        # Save activities
         activity_section = re.search(r'ACTIVITIES:(.*?)(?=DAY \d+:|$)', block, re.DOTALL)
         if activity_section:
             for line in activity_section.group(1).strip().split('\n'):
@@ -165,13 +197,17 @@ def save_itinerary_to_db(ai_response, session_id, user_id):
                         parts[0],
                         parts[1] if len(parts) > 1 else '',
                         parts[2] if len(parts) > 2 else '',
-                        float(parts[3].replace('$','').replace(',',''))
-                        if len(parts) > 3 and parts[3].replace('$','').replace(',','').replace('.','').isdigit() else 0,
+                        float(parts[3].replace('$', '').replace(',', ''))
+                        if len(parts) > 3 and parts[3].replace('$', '').replace(',', '').replace('.', '').isdigit() else 0,
                         parts[4] if len(parts) > 4 else ''
                     )
+
     print("✅ Full itinerary saved to DB!")
 
 
+# ─────────────────────────────────────────
+# Helper
+# ─────────────────────────────────────────
 def extract(text, field):
     match = re.search(rf'{field}:\s*(.+)', text)
     return match.group(1).strip() if match else ''
