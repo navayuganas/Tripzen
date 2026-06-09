@@ -11,7 +11,7 @@ from datetime import date, timedelta
 # ─────────────────────────────────────────
 # Gemini Setup
 # ─────────────────────────────────────────
-client = genai.Client(api_key="AQ.Ab8RN6KHfSxWamNnCiFyeQSb7wddwE4IDTui5QMNDopImAndaA")  # ← same key as app.py
+client = genai.Client(api_key="AQ.Ab8RN6Lek7MLYkn8ffIDvEDtYzVJYQTJB5Gq3eYMQcHP4qtbfw")  # ← same key as app.py
 
 SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant.
 You help users with:
