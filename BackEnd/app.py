@@ -19,7 +19,7 @@ CORS(app)
 # ─────────────────────────────────────────
 # GEMINI SETUP
 # ─────────────────────────────────────────
-client = genai.Client(api_key="AQ.Ab8RN6KHfSxWamNnCiFyeQSb7wddwE4IDTui5QMNDopImAndaA")  # ← paste your key here
+client = genai.Client(api_key="AQ.Ab8RN6IQljuHx53cq2YKRgb_K0RXmfrSlver9oOjwhnqVF_kvQ")  # ← paste your key here
 
 SYSTEM_INSTRUCTION = """You are a helpful travel assistant chatbot.
 Help users plan trips, suggest destinations, create itineraries,
