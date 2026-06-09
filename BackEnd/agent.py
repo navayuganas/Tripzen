@@ -16,14 +16,34 @@ os.environ["OLLAMA_API_KEY"] = "4d877094e2724901ad62b12d812634c9.vMGJhg4Q26CxeDn
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "gemma4:31b-cloud"
 
-SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant.
+SYSTEM_INSTRUCTION = """You are an intelligent travel chatbot assistant named TravelBot.
+
+You ALWAYS follow this ReAct thinking process before responding:
+
+Thought: Analyze what the user wants. Consider their past preferences if available.
+Action: Decide what to do — answer a question, recommend a destination, or plan an itinerary.
+Observation: Note any important details from the user's message or history.
+Answer: Give your final response to the user.
+
+---
+
+RULES:
+- Always reason through Thought → Action → Observation → Answer internally.
+- Only show the final Answer to the user. Never show Thought/Action/Observation in your reply.
+- Use the user's past conversation history to personalize every response.
+- Be friendly, concise, and helpful.
+
+---
+
 You help users with:
 1. Answering general travel questions
-2. Planning detailed day-by-day travel itineraries
-3. Recommending destinations
+2. Planning detailed day-by-day itineraries
+3. Recommending destinations based on preferences
 4. Providing travel tips and advice
 
-When planning a trip ALWAYS format response EXACTLY like this:
+---
+
+When planning a trip, ALWAYS format your Answer EXACTLY like this:
 
 ITINERARY: [Title]
 DESTINATION: [City, Country]
@@ -43,10 +63,7 @@ ACTIVITIES:
 
 DAY 2: [Day Title]
 ...and so on
-
-Always be friendly, helpful and detailed.
-Keep responses concise."""
-
+"""
 
 # ─────────────────────────────────────────
 # Get destinations from DB
@@ -69,19 +86,38 @@ def get_destinations_context():
 # Main Agent Function
 # ─────────────────────────────────────────
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
+    from db import get_user_history  # ← add this import
 
     wants_itinerary = any(w in user_message.lower() for w in
                           ["plan", "trip", "itinerary", "travel", "visit", "tour"])
 
-    # Build messages
+    # ── Build messages ──────────────────────────────────────────
     messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
 
-    # Only last 10 messages to save tokens
+    # 1. LONG-TERM MEMORY — all past sessions of this user
+    if user_id:
+        past_messages = get_user_history(user_id, limit=30)
+        if past_messages:
+            memory_lines = []
+            for m in past_messages:
+                prefix = "User" if m["sender"] == "user" else "Bot"
+                memory_lines.append(f"{prefix}: {m['message']}")
+
+            messages.append({
+                "role": "system",
+                "content": (
+                    "This user's past conversation history across all sessions:\n\n"
+                    + "\n".join(memory_lines)
+                    + "\n\nUse this to remember their preferences and past trips."
+                )
+            })
+
+    # 2. CURRENT SESSION — last 10 messages (short-term)
     for msg in conversation_history[-10:]:
         role = "user" if msg["sender"] == "user" else "assistant"
         messages.append({"role": role, "content": msg["message"]})
 
-    # Only send destinations context on first message
+    # 3. Destinations context on first message of session
     if len(conversation_history) == 0:
         destinations_context = get_destinations_context()
         if destinations_context:
@@ -93,14 +129,13 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
 
     messages.append({"role": "user", "content": full_message})
 
-    print(f"🤖 {MODEL} thinking...")
+    print(f"🤖 {MODEL} thinking... (memory blocks: {len(messages)})")
 
+    # ── Call model ───────────────────────────────────────────────
     try:
         response = requests.post(
             OLLAMA_URL,
-            headers={
-                "Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"
-            },
+            headers={"Authorization": f"Bearer {os.environ.get('OLLAMA_API_KEY', '')}"},
             json={
                 "model": MODEL,
                 "messages": messages,
@@ -110,7 +145,7 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
                     "temperature": 0.7
                 }
             },
-            timeout=60  # 60 second timeout
+            timeout=60
         )
 
         result = response.json()
@@ -130,7 +165,7 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
 
     print("✅ Response received")
 
-    # Save itinerary to DB if needed
+    # ── Save itinerary if needed ─────────────────────────────────
     if wants_itinerary and session_id and user_id and "Error" not in reply:
         try:
             save_itinerary_to_db(reply, session_id, user_id)
@@ -138,7 +173,6 @@ def run_agent(user_message, conversation_history, session_id=None, user_id=None)
             print("⚠️ Could not save itinerary:", str(e))
 
     return reply
-
 
 # ─────────────────────────────────────────
 # Save Itinerary to DB
