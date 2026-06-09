@@ -3,7 +3,7 @@ import mysql.connector
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'Yugan-22!!',
+    'password': '#October1again',
     'database': 'chatbot'
 }
 
@@ -37,7 +37,17 @@ def get_history(session_id, limit=10):
     conn.close()
     return [{"sender": r[0], "message": r[1]} for r in reversed(rows)]
 
+# ── Delete all messages in a session ──
+def delete_messages_by_session(session_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM messages WHERE session_id = %s", (session_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 # ── LONG TERM MEMORY — Get ALL past messages by user_id ──
+# (kept here but not used — can be used later if needed)
 def get_user_history(user_id, limit=30):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -52,5 +62,4 @@ def get_user_history(user_id, limit=30):
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
-    # Oldest first
     return [{"sender": r[0], "message": r[1]} for r in reversed(rows)]

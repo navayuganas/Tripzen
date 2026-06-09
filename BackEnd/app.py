@@ -1,10 +1,12 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+# DB functions
+from db import get_history, save_message, delete_messages_by_session
+
 # Models
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
 from models.chat_sessions import get_sessions_by_user, get_session_by_id, create_session, delete_session
-from models.messages import get_messages_by_session, create_message, delete_messages_by_session
 from models.itineraries import get_itineraries_by_user, get_itinerary_by_id, create_itinerary, update_itinerary_status, delete_itinerary
 from models.itinerary_day import get_days_by_itinerary, create_day, delete_days_by_itinerary
 from models.activities import get_activities_by_day, create_activity, delete_activities_by_day
@@ -121,7 +123,7 @@ def remove_session(session_id):
 
 @app.route('/messages/<int:session_id>', methods=['GET'])
 def messages(session_id):
-    return jsonify(get_messages_by_session(session_id)), 200
+    return jsonify(get_history(session_id)), 200
 
 @app.route('/messages', methods=['POST'])
 def new_message():
@@ -138,30 +140,30 @@ def new_message():
         return jsonify({"error": "sender must be 'user' or 'bot'"}), 400
 
     # Save user message to DB
-    new_id = create_message(session_id, sender, message)
+    new_id = save_message(session_id, sender, message)
 
     bot_reply = None
     if sender == 'user':
         try:
             from agent import run_agent
 
-            # Fetch conversation history
-            history = get_messages_by_session(session_id)
+            # Fetch current session history only
+            history = get_history(session_id)
             history_list = [
                 {"sender": m["sender"], "message": m["message"]}
-                for m in history[:-1]
+                for m in history[:-1]  # exclude the message just saved
             ]
 
             # Run agent
             bot_reply = run_agent(message, history_list, session_id, user_id)
 
             # Save bot reply to DB
-            create_message(session_id, 'bot', bot_reply)
+            save_message(session_id, 'bot', bot_reply)
 
         except Exception as e:
             print("AGENT ERROR:", str(e))
             bot_reply = f"Error: {str(e)}"
-            create_message(session_id, 'bot', bot_reply)
+            save_message(session_id, 'bot', bot_reply)
 
     return jsonify({
         "message": "Message saved",
