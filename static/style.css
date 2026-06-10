@@ -416,3 +416,18 @@ body {
 .sidebar-section.closed .chevron {
     transform: rotate(-90deg);
 }
+
+.pdf-btn {
+    display: inline-block;
+    background: #1a73e8;
+    color: white;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.pdf-btn:hover {
+    background: #1557b0;
+}
