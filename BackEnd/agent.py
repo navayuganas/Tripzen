@@ -1,10 +1,11 @@
+# agent.py
 import os
 import re
 from datetime import date, timedelta
 
 from langchain_ollama import ChatOllama
 from langchain_classic.agents import create_tool_calling_agent, AgentExecutor
-from langchain_classic.tools import tool                        # ← change this
+from langchain_classic.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -15,6 +16,9 @@ from models.itineraries import create_itinerary
 from models.itinerary_day import create_day
 from models.activities import create_activity
 
+# ─────────────────────────────────────────
+# Helper — defined BEFORE tools
+# ─────────────────────────────────────────
 def extract(text, field):
     match = re.search(rf'{field}:\s*(.+)', text)
     return match.group(1).strip() if match else ''
@@ -22,7 +26,7 @@ def extract(text, field):
 # ─────────────────────────────────────────
 # Ollama Cloud Setup
 # ─────────────────────────────────────────
-os.environ["OLLAMA_API_KEY"] = "4b23241f30ef486bba90fa70a0786457.8yNcAXrU-UsTIa2UlR7lCFou"  
+os.environ["OLLAMA_API_KEY"] = "4b23241f30ef486bba90fa70a0786457.8yNcAXrU-UsTIa2UlR7lCFou"  # ← paste NEW key
 
 llm = ChatOllama(
     model="gemma4:31b-cloud",
@@ -66,6 +70,8 @@ def get_destinations(query: str = "") -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"Error fetching destinations: {str(e)}"
+
+
 @tool
 def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> str:
     """Save a generated itinerary to the database.
@@ -73,7 +79,6 @@ def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> s
     try:
         print("💾 Saving itinerary to DB...")
 
-        # ── Fix: skip DB save if no valid session ──
         if not session_id or session_id == 0:
             print("⚠️ No valid session_id — skipping DB save")
             return "Itinerary generated successfully (not saved to DB — no session)"
@@ -93,7 +98,7 @@ def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> s
         itinerary_id = create_itinerary(
             session_id, user_id, title, destination,
             str(start_date), str(end_date), total_days,
-            float(budget) if budget.replace('.','').isdigit() else 0,
+            float(budget) if budget.replace('.', '').isdigit() else 0,
             int(travelers) if travelers.isdigit() else 1,
             trip_type, summary
         )
@@ -111,7 +116,7 @@ def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> s
             day_id = create_day(
                 itinerary_id, i, day_title, description,
                 hotel, transport,
-                float(cost) if cost.replace('.','').isdigit() else 0
+                float(cost) if cost.replace('.', '').isdigit() else 0
             )
             print(f"✅ Day {i} saved: ID {day_id}")
 
@@ -128,8 +133,8 @@ def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> s
                             parts[0],
                             parts[1] if len(parts) > 1 else '',
                             parts[2] if len(parts) > 2 else '',
-                            float(parts[3].replace('$','').replace(',','').replace('₹',''))
-                            if len(parts) > 3 and parts[3].replace('$','').replace(',','').replace('₹','').replace('.','').isdigit() else 0,
+                            float(parts[3].replace('$', '').replace(',', '').replace('₹', ''))
+                            if len(parts) > 3 and parts[3].replace('$', '').replace(',', '').replace('₹', '').replace('.', '').isdigit() else 0,
                             parts[4] if len(parts) > 4 else ''
                         )
 
@@ -139,7 +144,8 @@ def save_itinerary(ai_response: str, session_id: int = 0, user_id: int = 0) -> s
     except Exception as e:
         print(f"⚠️ Could not save itinerary: {str(e)}")
         return f"Failed to save itinerary: {str(e)}"
-    
+
+
 @tool
 def create_pdf(itinerary_text: str, session_id: int = 0) -> str:
     """Generate a downloadable PDF of the travel itinerary.
@@ -153,8 +159,10 @@ def create_pdf(itinerary_text: str, session_id: int = 0) -> str:
         return f"PDF_URL:{pdf_url}"
     except Exception as e:
         return f"Failed to create PDF: {str(e)}"
+
+
 # ─────────────────────────────────────────
-# Prompt
+# Prompt  ← THIS was missing before
 # ─────────────────────────────────────────
 prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an intelligent travel chatbot assistant and your name is TripZen.
@@ -170,9 +178,11 @@ You have access to these tools:
 - save_itinerary: use ONLY after generating a full itinerary
 - create_pdf: use ONLY when user explicitly confirms YES to PDF
 
-When planning a trip follow these EXACT steps in ORDER:
+CRITICAL RULE — When planning a trip you MUST follow these steps IN EXACT ORDER:
 
-STEP 1 — Generate and display the FULL itinerary in this EXACT format:
+STEP 1 — First call web_search and get_destinations tools to gather information.
+
+STEP 2 — Then write the COMPLETE itinerary in your response text using this EXACT format:
 
 ITINERARY: [Title]
 DESTINATION: [City, Country]
@@ -193,74 +203,85 @@ ACTIVITIES:
 DAY 2: [Day Title]
 ...and so on
 
-STEP 2 — After displaying the COMPLETE itinerary text above,
-call save_itinerary tool to save it to database.
+STEP 3 — After writing the full itinerary text above, call save_itinerary tool.
 
-STEP 3 — After saving, add this EXACT line at the end of your response:
+STEP 4 — At the very end of your response, after the full itinerary text, add:
 "Would you like me to generate a downloadable PDF of this itinerary? 📄"
 
-STEP 4 — Wait for user response:
-- If user says YES / yes / sure / okay / generate → call create_pdf tool immediately
-- If user says NO / no / skip / don't → do NOT call create_pdf, continue normally
+STEP 5 — Wait for user response:
+- User says YES/yes/sure/okay → call create_pdf tool immediately
+- User says NO/no/skip → do NOT call create_pdf
 
-IMPORTANT RULES:
-- ALWAYS show the full itinerary text FIRST before asking about PDF
-- NEVER ask about PDF without showing the itinerary first
-- NEVER generate PDF without user confirmation
-- NEVER ask for PDF confirmation more than once per itinerary
-- NEVER skip the itinerary display and jump straight to PDF question
+ABSOLUTE RULES:
+- Your final response MUST contain the full itinerary text starting with "ITINERARY:" 
+  before any PDF question. If you called save_itinerary but forgot to write the 
+  itinerary in your response, write it now before asking about PDF.
+- NEVER ask about PDF before showing the full itinerary text
+- The itinerary text MUST appear in your response BEFORE the PDF question
+- NEVER call save_itinerary or create_pdf before the itinerary is written in the response
+- NEVER skip showing the itinerary and jump straight to PDF question
+- The order is ALWAYS: show itinerary → save → ask about PDF
 
 Always be friendly, helpful and detailed.
 Keep responses concise."""),
-    MessagesPlaceholder(variable_name="chat_history"),      
-    ("human", "{input}"),                                   
-    MessagesPlaceholder(variable_name="agent_scratchpad"),  
+    MessagesPlaceholder(variable_name="chat_history"),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
 # ─────────────────────────────────────────
 # Agent Setup
 # ─────────────────────────────────────────
-tools = [web_search, get_destinations, save_itinerary,create_pdf]
+tools = [web_search, get_destinations, save_itinerary, create_pdf]
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
     verbose=True,
-    max_iterations=5,
+    max_iterations=20,
+    max_execution_time=180,
     handle_parsing_errors=True,
+    return_intermediate_steps=True,  # ← add this
 )
-
-
 # ─────────────────────────────────────────
 # Main Function
 # ─────────────────────────────────────────
 def run_agent(user_message, conversation_history, session_id=None, user_id=None):
 
-    # build chat history
+    # ── Build chat history safely ──
     chat_history = []
     for msg in conversation_history[-10:]:
+        if not msg.get("message"):
+            continue
+        content = str(msg["message"])
         if msg["sender"] == "user":
-            chat_history.append(HumanMessage(content=msg["message"]))
+            chat_history.append(HumanMessage(content=content))
         else:
-            chat_history.append(AIMessage(content=msg["message"]))
+            chat_history.append(AIMessage(content=content))
+
+    # ── Check if last bot message asked about PDF ──
+    last_bot_message = ""
+    for msg in reversed(conversation_history):
+        if msg.get("sender") == "bot" and msg.get("message"):
+            last_bot_message = str(msg["message"])
+            break
 
     # ── Check if user is confirming PDF ──
-    pdf_keywords = ["yes", "sure", "okay", "ok", "generate", "yeah", "yep", "please"]
-    is_pdf_confirmation = any(
-        word in user_message.lower() for word in pdf_keywords
-    )
+    pdf_keywords        = ["yes", "sure", "okay", "ok", "generate", "yeah", "yep", "please"]
+    bot_asked_pdf       = "Would you like me to generate" in last_bot_message and "PDF" in last_bot_message
+    user_said_yes       = any(word == (user_message or "").lower().strip() for word in pdf_keywords)
+    is_pdf_confirmation = bot_asked_pdf and user_said_yes
 
     if is_pdf_confirmation:
         # find last itinerary from conversation history
         last_itinerary = None
         for msg in reversed(conversation_history):
-            if msg["sender"] == "bot" and "ITINERARY:" in msg["message"]:
-                last_itinerary = msg["message"]
+            if msg.get("sender") == "bot" and msg.get("message") and "ITINERARY:" in str(msg["message"]):
+                last_itinerary = str(msg["message"])
                 break
 
         if last_itinerary:
-            # tell agent explicitly what to do
             full_message = f"""The user confirmed YES to PDF generation.
 Here is the itinerary to convert to PDF:
 
@@ -269,18 +290,19 @@ Here is the itinerary to convert to PDF:
 Call the create_pdf tool now with this itinerary text.
 session_id={session_id}, user_id={user_id}"""
         else:
-            full_message = user_message
+            full_message = user_message or ""
     else:
         # normal message with session context
-        full_message = user_message
-        if session_id and user_id:
-           full_message = f"""{user_message}
+        full_message = f"""{user_message or ""}
 
 IMPORTANT CONTEXT — always use these exact values when calling tools:
 session_id={session_id}
 user_id={user_id}"""
 
     print(f"📩 User: {user_message}")
+    print(f"🤖 Bot asked PDF: {bot_asked_pdf}")
+    print(f"👤 User said yes: {user_said_yes}")
+    print(f"📄 PDF confirmation: {is_pdf_confirmation}")
     print(f"🤖 Agent thinking...")
 
     try:
@@ -288,11 +310,49 @@ user_id={user_id}"""
             "input": full_message,
             "chat_history": chat_history,
         })
-        reply = result["output"]
+        reply = result.get("output") or ""
+        print(f"🔍 Intermediate steps: {result.get('intermediate_steps', [])}")
+
+        # ── If agent wrapped PDF url in markdown, extract and reformat ──
+        if "intermediate_steps" in result:
+            for action, observation in result["intermediate_steps"]:
+                if hasattr(action, 'tool') and action.tool == "create_pdf":
+                    print(f"📄 PDF tool observation: {observation}")
+                    if "PDF_URL:" in str(observation):
+                        pdf_url = str(observation).split("PDF_URL:")[1].strip()
+                        reply = f"Your PDF is ready!\nPDF_URL:{pdf_url}"
+                    break
+
+        # ── If agent wrapped PDF url in markdown, extract and reformat ──
+        if "intermediate_steps" in result:
+            for action, observation in result["intermediate_steps"]:
+                if hasattr(action, 'tool') and action.tool == "create_pdf":
+                    if "PDF_URL:" in str(observation):
+                        pdf_url = str(observation).split("PDF_URL:")[1].strip()
+                        # reformat reply to use PDF_URL: so frontend detects instantly
+                        reply = f"Your PDF is ready!\nPDF_URL:{pdf_url}"
+                    break
+
+        # ── Detect if agent skipped itinerary display ──
+        if "Would you like me to generate" in reply and "ITINERARY:" not in reply:
+            print("⚠️ Agent skipped itinerary display — recovering from intermediate steps")
+
+            itinerary_text = None
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    if hasattr(action, 'tool') and action.tool == "save_itinerary":
+                        itinerary_text = action.tool_input.get("ai_response", "")
+                        break
+
+            if itinerary_text:
+                reply = f"{itinerary_text}\n\nWould you like me to generate a downloadable PDF of this itinerary? 📄"
+
         print(f"✅ Agent done")
 
     except Exception as e:
+        import traceback
         print(f"⚠️ Agent error: {str(e)}")
+        print(traceback.format_exc())
         reply = "Sorry, I encountered an error. Please try again."
 
     return reply
