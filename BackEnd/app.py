@@ -1,4 +1,5 @@
-from flask import Flask, jsonify, request
+import os
+from flask import Flask, jsonify, request,send_from_directory
 from flask_cors import CORS
 
 # DB functions
@@ -350,6 +351,14 @@ def new_destination():
         data.get('best_season')
     )
     return jsonify({"message": "Destination created", "destination_id": new_id}), 201
+
+@app.route('/static/pdfs/<filename>')
+def serve_pdf(filename):
+    return send_from_directory(
+        os.path.join(os.getcwd(), 'static', 'pdfs'),
+        filename
+    )
+
 
 
 # ─────────────────────────────────────────
