@@ -417,9 +417,19 @@ body {
     transform: rotate(-90deg);
 }
 
+.itinerary-response {
+    line-height: 1.8;
+    white-space: normal;
+}
+.itinerary-response strong {
+    display: block;
+    margin-top: 8px;
+    color: #4C2A4C;
+}
+
 .pdf-btn {
     display: inline-block;
-    background: #1a73e8;
+    background: navy;
     color: white;
     text-decoration: none;
     padding: 8px 16px;

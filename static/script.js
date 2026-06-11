@@ -80,18 +80,74 @@ async function loadMessages(session_id) {
         console.error('Error loading messages:', error);
     }
 }
+  
+function formatItinerary(text) {
+    text = text.replace(/(ITINERARY:|DESTINATION:|DURATION:|BUDGET:|TRAVELERS:|TRIP_TYPE:|SUMMARY:|DAY \d+[^:]*:|HOTEL:|TRANSPORT:|COST:|DESCRIPTION:|ACTIVITIES:)/g,
+        '<br><strong>$1</strong>');
+    text = text.replace(/ - /g, '<br>• ');
+    return `<div class="itinerary-response">${text}</div>`;
+}
 
 // ─────────────────────────────────────────
 // Add message bubble to UI
 // ─────────────────────────────────────────
 function addMessageToUI(sender, text) {
+    // guard against null/undefined messages
+    if (!text) return;
+    text = String(text);
+
     const div = document.createElement('div');
     div.className = `message ${sender === 'user' ? 'user' : ''}`;
-    div.textContent = text;
+
+    if (sender === 'bot' && text.includes('PDF_URL:')) {
+        // handle PDF_URL: format
+        const parts  = text.split('PDF_URL:');
+        const before = parts[0].trim();
+        const pdfUrl = parts[1].trim();
+
+        if (before) {
+            div.textContent = before;
+            chatbox.appendChild(div);
+        }
+
+        const pdfBtn       = document.createElement('a');
+        pdfBtn.href        = pdfUrl;
+        pdfBtn.target      = '_blank';
+        pdfBtn.textContent = '📄 Download Itinerary PDF';
+        pdfBtn.className   = 'pdf-btn';
+        chatbox.appendChild(pdfBtn);
+
+    } else if (sender === 'bot' && text.includes('](http')) {
+        // handle markdown link format: [text](url)
+        const parts = text.split(/(\[.*?\]\(.*?\))/g);
+        parts.forEach(part => {
+            const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+            if (linkMatch) {
+                const a       = document.createElement('a');
+                a.href        = linkMatch[2];
+                a.target      = '_blank';
+                a.textContent = linkMatch[1];
+                a.className   = 'pdf-btn';
+                chatbox.appendChild(a);
+            } else if (part.trim()) {
+                const span       = document.createElement('span');
+                span.textContent = part;
+                span.className   = `message ${sender === 'user' ? 'user' : ''}`;
+                chatbox.appendChild(span);
+            }
+        });
+
+   } else {
+    if (sender === 'bot') {
+        div.innerHTML = formatItinerary(text);
+    } else {
+        div.textContent = text;
+    }
     chatbox.appendChild(div);
-    chatbox.scrollTop = chatbox.scrollHeight;
 }
 
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
 // ─────────────────────────────────────────
 // Send message
 // ─────────────────────────────────────────
