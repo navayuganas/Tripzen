@@ -80,6 +80,13 @@ async function loadMessages(session_id) {
         console.error('Error loading messages:', error);
     }
 }
+  
+function formatItinerary(text) {
+    text = text.replace(/(ITINERARY:|DESTINATION:|DURATION:|BUDGET:|TRAVELERS:|TRIP_TYPE:|SUMMARY:|DAY \d+[^:]*:|HOTEL:|TRANSPORT:|COST:|DESCRIPTION:|ACTIVITIES:)/g,
+        '<br><strong>$1</strong>');
+    text = text.replace(/ - /g, '<br>• ');
+    return `<div class="itinerary-response">${text}</div>`;
+}
 
 // ─────────────────────────────────────────
 // Add message bubble to UI
