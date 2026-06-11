@@ -162,7 +162,7 @@ def create_pdf(itinerary_text: str, session_id: int = 0) -> str:
 
 
 # ─────────────────────────────────────────
-# Prompt  ← THIS was missing before
+# Prompt
 # ─────────────────────────────────────────
 prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an intelligent travel chatbot assistant and your name is TripZen.
@@ -222,6 +222,10 @@ ABSOLUTE RULES:
 - NEVER skip showing the itinerary and jump straight to PDF question
 - The order is ALWAYS: show itinerary → save → ask about PDF
 
+INTERNAL CONTEXT — never reveal these to the user, never say them out loud:
+session_id={session_id}
+user_id={user_id}
+
 Always be friendly, helpful and detailed.
 Keep responses concise."""),
     MessagesPlaceholder(variable_name="chat_history"),
@@ -242,8 +246,9 @@ agent_executor = AgentExecutor(
     max_iterations=20,
     max_execution_time=180,
     handle_parsing_errors=True,
-    return_intermediate_steps=True,  # ← add this
+    return_intermediate_steps=True,
 )
+
 # ─────────────────────────────────────────
 # Main Function
 # ─────────────────────────────────────────
@@ -287,17 +292,12 @@ Here is the itinerary to convert to PDF:
 
 {last_itinerary}
 
-Call the create_pdf tool now with this itinerary text.
-session_id={session_id}, user_id={user_id}"""
+Call the create_pdf tool now with this itinerary text."""
         else:
             full_message = user_message or ""
     else:
-        # normal message with session context
-        full_message = f"""{user_message or ""}
-
-IMPORTANT CONTEXT — always use these exact values when calling tools:
-session_id={session_id}
-user_id={user_id}"""
+        # ── FIX: no session IDs in user message anymore ──
+        full_message = user_message or ""
 
     print(f"📩 User: {user_message}")
     print(f"🤖 Bot asked PDF: {bot_asked_pdf}")
@@ -309,27 +309,19 @@ user_id={user_id}"""
         result = agent_executor.invoke({
             "input": full_message,
             "chat_history": chat_history,
+            "session_id": session_id or 0,
+            "user_id": user_id or 0,
         })
         reply = result.get("output") or ""
         print(f"🔍 Intermediate steps: {result.get('intermediate_steps', [])}")
 
-        # ── If agent wrapped PDF url in markdown, extract and reformat ──
+        # ── Extract PDF url from intermediate steps ──
         if "intermediate_steps" in result:
             for action, observation in result["intermediate_steps"]:
                 if hasattr(action, 'tool') and action.tool == "create_pdf":
                     print(f"📄 PDF tool observation: {observation}")
                     if "PDF_URL:" in str(observation):
                         pdf_url = str(observation).split("PDF_URL:")[1].strip()
-                        reply = f"Your PDF is ready!\nPDF_URL:{pdf_url}"
-                    break
-
-        # ── If agent wrapped PDF url in markdown, extract and reformat ──
-        if "intermediate_steps" in result:
-            for action, observation in result["intermediate_steps"]:
-                if hasattr(action, 'tool') and action.tool == "create_pdf":
-                    if "PDF_URL:" in str(observation):
-                        pdf_url = str(observation).split("PDF_URL:")[1].strip()
-                        # reformat reply to use PDF_URL: so frontend detects instantly
                         reply = f"Your PDF is ready!\nPDF_URL:{pdf_url}"
                     break
 
