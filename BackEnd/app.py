@@ -15,7 +15,7 @@ from models.preferences import get_preferences_by_user, create_preferences, upda
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500"])
 
 # ─────────────────────────────────────────
 # USERS
