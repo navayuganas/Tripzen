@@ -137,14 +137,10 @@ function addMessageToUI(sender, text) {
             }
         });
 
-   } else {
-    if (sender === 'bot') {
-        div.innerHTML = formatItinerary(text);
     } else {
         div.textContent = text;
+        chatbox.appendChild(div);
     }
-    chatbox.appendChild(div);
-}
 
     chatbox.scrollTop = chatbox.scrollHeight;
 }
