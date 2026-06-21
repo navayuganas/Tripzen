@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChatBot</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
-    <link rel="stylesheet" href= "../static/style.css" />
+    <link rel="stylesheet" href="/static/style.css" />
 </head>
 
 <body>
@@ -33,8 +33,7 @@
                         </div>
                         <div class="chat-list">
                             <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>Paris 5-day trip</span></div>
-                            <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>Tokyo weekend plan</span>
-                            </div>
+                            <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>Tokyo weekend plan</span></div>
                             <div class="itinerary-item"><i class="ti ti-map-pin"></i><span>NYC food tour</span></div>
                         </div>
                     </div>
@@ -42,35 +41,31 @@
                         <div class="section-label collapsible">
                             Recent <span class="chevron">▾</span>
                         </div>
-                        <div class="chat-list" id="recentList">
-                            <div class="chat-item active"><i class="ti ti-message"></i><span>Hello! How can I
-                                help?</span></div>
-                            <div class="chat-item"><i class="ti ti-message"></i><span>3 Days plan for Kochi</span></div>
-                            <div class="chat-item"><i class="ti ti-message"></i><span>2 Day IV plan</span></div>
-                            <div class="chat-item"><i class="ti ti-message"></i><span>Plan my weekend</span></div>
-                            <div class="chat-item"><i class="ti ti-message"></i><span>Top places to visit in Summer</span></div>
-                        </div>
+                        <div class="chat-list" id="recentList"></div>
                     </div>
                 </div>
             </div>
             <div class="sidebar-footer">
                 <div class="profile-row">
-                    <div class="avatar">YO</div>
+                    <div class="avatar">{{ username[:2].upper() }}</div>
                     <div class="profile-info">
-                        <div class="profile-name">Your Name</div>
-                        <div class="profile-email">you@example.com</div>
+                        <div class="profile-name">{{ username }}</div>
+                        <div class="profile-email">{{ email }}</div>
                     </div>
-                    <i class="ti ti-dots" style="font-size:16px; color:#916a8a;"></i>
+                    <a href="/logout" title="Logout">
+                        <i class="ti ti-logout" style="font-size:16px; color:#916a8a;"></i>
+                    </a>
                 </div>
             </div>
         </div>
-        <div class="main"> 
+
+        <div class="main">
             <div class="Chat-window">
                 <div class="Header">
                     <button class="toggle-btn" id="toggleBtn" aria-label="Toggle sidebar">
                         <i class="ti ti-menu-2"></i>
                     </button>
-                    <span class="header-title">TripZen✈️</span>
+                    <span class="header-title">TripZen ✈️</span>
                 </div>
                 <div class="ChatBox" id="chatbox">
                     <div class="message">Hello! How can I help you today?</div>
@@ -82,8 +77,19 @@
             </div>
         </div>
     </div>
-    <script src="../static/api.js"></script>   
-    <script src="../static/script.js"></script>
+
+    <script>
+        const CURRENT_USER_ID  = {{ user_id }};
+        const CURRENT_USERNAME = "  {{ username }}";
+        const CURRENT_EMAIL    = "{{ email }}";
+
+        // Keep localStorage in sync with Flask session
+        localStorage.setItem('user_id',   CURRENT_USER_ID);
+        localStorage.setItem('full_name', CURRENT_USERNAME);
+        localStorage.setItem('email',     CURRENT_EMAIL);
+    </script>
+    <script src="/static/api.js"></script>
+    <script src="/static/script.js"></script>
 </body>
 
 </html>

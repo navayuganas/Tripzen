@@ -1,9 +1,11 @@
 import os
-from flask import Flask, jsonify, request,send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, render_template, redirect, url_for, session, flash
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 
 # DB functions
 from db import get_history, save_message, delete_messages_by_session
+from db import get_db_connection, init_db
 
 # Models
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
@@ -14,8 +16,13 @@ from models.activities import get_activities_by_day, create_activity, delete_act
 from models.preferences import get_preferences_by_user, create_preferences, update_preferences
 from models.destinations import get_all_destinations, get_destination_id, search_destinations, create_destination
 
-app = Flask(__name__)
-CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500"])
+app = Flask(__name__,
+    template_folder='../templates',
+    static_folder='../static')
+app.secret_key = 'tripzen-secret-key'
+CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500", "http://localhost:5000"])
+with app.app_context():
+    init_db()
 
 # ─────────────────────────────────────────
 # USERS
@@ -47,8 +54,10 @@ def register():
     if existing:
         return jsonify({"error": "Email already registered"}), 409
 
-    new_id = create_user(full_name, email, phone, password)
+    hashed = generate_password_hash(password)
+    new_id = create_user(full_name, email, phone, hashed)
     return jsonify({"message": "User registered", "user_id": new_id}), 201
+
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -63,8 +72,13 @@ def login():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    if user['password_hash'] != password:
+    if not check_password_hash(user['password_hash'], password):
         return jsonify({"error": "Wrong password"}), 401
+
+    # Also set Flask session so the home route works
+    session['user_id']  = user['id']
+    session['username'] = user['full_name']
+    session['email']    = user['email']
 
     return jsonify({
         "message": "Login successful",
@@ -72,6 +86,7 @@ def login():
         "full_name": user['full_name'],
         "email": user['email']
     }), 200
+
 
 @app.route('/users/<int:user_id>', methods=['DELETE'])
 def remove_user(user_id):
@@ -359,6 +374,56 @@ def serve_pdf(filename):
         filename
     )
 
+
+# ─────────────────────────────────────────
+# AUTH PAGES (Login / Register UI)
+# ─────────────────────────────────────────
+
+@app.route('/')
+def home():
+    if 'user_id' not in session:
+        return redirect(url_for('login_page'))
+    return render_template('index.html',
+        username=session['username'],
+        email=session['email'],
+        user_id=session['user_id']
+    )
+
+@app.route('/login-page', methods=['GET', 'POST'])
+def login_page():
+    if request.method == 'POST':
+        email    = request.form['email']
+        password = request.form['password']
+        user     = get_user_by_email(email)
+        if not user or not check_password_hash(user['password_hash'], password):
+            flash('Invalid email or password.', 'error')
+            return render_template('login.html')
+        session['user_id']  = user['id']
+        session['username'] = user['full_name']
+        session['email']    = user['email']
+        return redirect(url_for('home'))
+    return render_template('login.html')
+
+@app.route('/register-page', methods=['GET', 'POST'])
+def register_page():
+    if request.method == 'POST':
+        full_name = request.form['username']
+        email     = request.form['email']
+        password  = request.form['password']
+        existing  = get_user_by_email(email)
+        if existing:
+            flash('Email already registered.', 'error')
+            return render_template('register.html')
+        hashed = generate_password_hash(password)
+        create_user(full_name, email, None, hashed)
+        flash('Account created! Please sign in.', 'success')
+        return redirect(url_for('login_page'))
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login_page'))
 
 
 # ─────────────────────────────────────────

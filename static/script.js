@@ -12,7 +12,7 @@ const sendBtn       = document.getElementById('sendBtn');
 // ─────────────────────────────────────────
 // State
 // ─────────────────────────────────────────
-let currentUserId    = localStorage.getItem('user_id');
+let currentUserId    = (typeof CURRENT_USER_ID !== 'undefined' ? CURRENT_USER_ID : null) || localStorage.getItem('user_id');
 let currentSessionId = localStorage.getItem('session_id');
 
 // ─────────────────────────────────────────
@@ -80,7 +80,7 @@ async function loadMessages(session_id) {
         console.error('Error loading messages:', error);
     }
 }
-  
+
 function formatItinerary(text) {
     text = text.replace(/(ITINERARY:|DESTINATION:|DURATION:|BUDGET:|TRAVELERS:|TRIP_TYPE:|SUMMARY:|DAY \d+[^:]*:|HOTEL:|TRANSPORT:|COST:|DESCRIPTION:|ACTIVITIES:)/g,
         '<br><strong>$1</strong>');
@@ -92,7 +92,6 @@ function formatItinerary(text) {
 // Add message bubble to UI
 // ─────────────────────────────────────────
 function addMessageToUI(sender, text) {
-    // guard against null/undefined messages
     if (!text) return;
     text = String(text);
 
@@ -100,7 +99,6 @@ function addMessageToUI(sender, text) {
     div.className = `message ${sender === 'user' ? 'user' : ''}`;
 
     if (sender === 'bot' && text.includes('PDF_URL:')) {
-        // handle PDF_URL: format
         const parts  = text.split('PDF_URL:');
         const before = parts[0].trim();
         const pdfUrl = parts[1].trim();
@@ -118,7 +116,6 @@ function addMessageToUI(sender, text) {
         chatbox.appendChild(pdfBtn);
 
     } else if (sender === 'bot' && text.includes('](http')) {
-        // handle markdown link format: [text](url)
         const parts = text.split(/(\[.*?\]\(.*?\))/g);
         parts.forEach(part => {
             const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
@@ -137,17 +134,18 @@ function addMessageToUI(sender, text) {
             }
         });
 
-   } else {
-    if (sender === 'bot') {
-        div.innerHTML = formatItinerary(text);
     } else {
-        div.textContent = text;
+        if (sender === 'bot') {
+            div.innerHTML = formatItinerary(text);
+        } else {
+            div.textContent = text;
+        }
+        chatbox.appendChild(div);
     }
-    chatbox.appendChild(div);
-}
 
     chatbox.scrollTop = chatbox.scrollHeight;
 }
+
 // ─────────────────────────────────────────
 // Send message
 // ─────────────────────────────────────────
@@ -155,20 +153,16 @@ async function handleSendMessage() {
     const text = msgInput.value.trim();
     if (!text) return;
 
-    // clear input
     msgInput.value = '';
     msgInput.style.height = 'auto';
 
-    // show user message in UI
     addMessageToUI('user', text);
 
-    // if no user logged in
     if (!currentUserId) {
         addMessageToUI('bot', 'Please login first to chat.');
         return;
     }
 
-    // if no session — create one
     if (!currentSessionId) {
         try {
             const session = await createSession(currentUserId, text.slice(0, 50));
@@ -182,7 +176,6 @@ async function handleSendMessage() {
         }
     }
 
-    // show typing indicator
     const typing = document.createElement('div');
     typing.className = 'message';
     typing.textContent = 'Bot is typing...';
@@ -191,13 +184,9 @@ async function handleSendMessage() {
     chatbox.scrollTop = chatbox.scrollHeight;
 
     try {
-        // send message to Flask → Gemini 2.5 Flash
         const data = await sendMessage(currentSessionId, 'user', text);
-
-        // remove typing indicator
         document.getElementById('typing')?.remove();
 
-        // show Gemini reply in UI
         if (data.bot_reply) {
             addMessageToUI('bot', data.bot_reply);
         } else {
@@ -283,8 +272,8 @@ document.querySelectorAll('.sidebar-section').forEach(section => {
 // Update profile in sidebar
 // ─────────────────────────────────────────
 function updateProfile() {
-    const name  = localStorage.getItem('full_name') || 'Your Name';
-    const email = localStorage.getItem('email') || 'you@example.com';
+    const name  = (typeof CURRENT_USERNAME !== 'undefined' ? CURRENT_USERNAME : null) || localStorage.getItem('full_name') || 'Your Name';
+    const email = (typeof CURRENT_EMAIL !== 'undefined' ? CURRENT_EMAIL : null) || localStorage.getItem('email') || 'you@example.com';
 
     document.querySelector('.profile-name').textContent  = name;
     document.querySelector('.profile-email').textContent = email;
