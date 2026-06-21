@@ -3,7 +3,7 @@ import mysql.connector
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': 'Yugan-22!!',
+    'password': '#October1again',
     'database': 'chatbot'
 }
 
@@ -63,3 +63,20 @@ def get_user_history(user_id, limit=30):
     cursor.close()
     conn.close()
     return [{"sender": r[0], "message": r[1]} for r in reversed(rows)]
+
+# ── Create tables if they don't exist ──
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(100) NOT NULL,
+            email VARCHAR(150) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    cursor.close()
+    conn.close()
