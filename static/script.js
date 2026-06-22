@@ -191,7 +191,6 @@ async function handleSendMessage() {
     chatbox.scrollTop = chatbox.scrollHeight;
 
     try {
-        // send message to Flask → Gemini 2.5 Flash
         const data = await sendMessage(currentSessionId, 'user', text);
 
         // remove typing indicator
