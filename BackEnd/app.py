@@ -41,22 +41,23 @@ def user(user_id):
 
 @app.route('/register', methods=['POST'])
 def register():
-    data      = request.get_json()
+    data = request.get_json()
     full_name = data.get('full_name')
-    email     = data.get('email')
-    phone     = data.get('phone')
-    password  = data.get('password')
+    email = data.get('email')
+    password = data.get('password')
 
     if not full_name or not email or not password:
-        return jsonify({"error": "full_name, email and password are required"}), 400
+        return jsonify({"error": "All fields are required"}), 400
 
-    existing = get_user_by_email(email)
-    if existing:
-        return jsonify({"error": "Email already registered"}), 409
+    # Save user to database logic here...
+    user_id = create_user(full_name, email, password) 
 
-    hashed = generate_password_hash(password)
-    new_id = create_user(full_name, email, phone, hashed)
-    return jsonify({"message": "User registered", "user_id": new_id}), 201
+    # Log them in immediately by setting session
+    session['user_id'] = user_id
+    session['username'] = full_name
+    session['email'] = email
+
+    return jsonify({"message": "Registration successful"}), 201
 
 
 @app.route('/login', methods=['POST'])
@@ -75,7 +76,7 @@ def login():
     if not check_password_hash(user['password_hash'], password):
         return jsonify({"error": "Wrong password"}), 401
 
-    # Also set Flask session so the home route works
+    # ── FIX: Set Flask session cookies so the home ('/') route works ──
     session['user_id']  = user['id']
     session['username'] = user['full_name']
     session['email']    = user['email']

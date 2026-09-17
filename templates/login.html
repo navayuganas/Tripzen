@@ -39,6 +39,17 @@
       text-align: center;
     }
 
+    .flash-success {
+      background: rgba(40, 167, 69, 0.15);
+      border: 1px solid rgba(40, 167, 69, 0.4);
+      color: #8affad;
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+
     label {
       display: block;
       font-size: 12px;
@@ -50,8 +61,7 @@
     }
 
     input[type="email"],
-    input[type="password"],
-    input[type="text"] {
+    input[type="password"] {
       width: 100%;
       padding: 10px 14px;
       background: rgba(255,255,255,0.08);
@@ -94,13 +104,19 @@
       <p>Sign in to plan your journey</p>
     </div>
 
-    {% with messages = get_flashed_messages() %}
+    <!-- Displays error or success flash messages from Flask -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="flash-error">{{ messages[0] }}</div>
+        {% for category, message in messages %}
+          <div class="{% if category == 'error' %}flash-error{% else %}flash-success{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
       {% endif %}
     {% endwith %}
 
-    <form>
+    <!-- Standard Form submitting directly to Flask /login-page -->
+    <form action="/login-page" method="POST">
       <label>Email</label>
       <input type="email" name="email" placeholder="you@example.com" required />
 
@@ -112,43 +128,5 @@
 
     <p class="footer-link">Don't have an account? <a href="/register-page">Register</a></p>
   </div>
-
-  <script>
-    document.querySelector('form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const email    = document.querySelector('input[name="email"]').value;
-        const password = document.querySelector('input[name="password"]').value;
-
-        try {
-            const response = await fetch('http://localhost:5000/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                localStorage.setItem('user_id',   data.user_id);
-                localStorage.setItem('full_name', data.full_name);
-                localStorage.setItem('email',     data.email);
-                window.location.href = 'http://localhost:5000/';
-            } else {
-                const existing = document.querySelector('.flash-error');
-                if (existing) existing.remove();
-
-                const err = document.createElement('div');
-                err.className   = 'flash-error';
-                err.textContent = data.error || 'Login failed.';
-                document.querySelector('.auth-card').insertBefore(
-                    err, document.querySelector('form')
-                );
-            }
-        } catch (err) {
-            console.error('Login error:', err);
-        }
-    });
-  </script>
 </body>
 </html>
