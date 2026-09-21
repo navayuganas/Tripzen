@@ -27,11 +27,11 @@ def get_user_by_email(email):
     con.close()
     return user
 
-def create_user(full_name, email, phone, password_hash):
+def create_user(full_name, email,password_hash):
     con = get_db_connection()
     cursor = con.cursor()
     cursor.execute(
-        "INSERT INTO users (full_name, email,password_hash) VALUES (%s, %s, %s, %s)",
+        "INSERT INTO users (full_name, email,password_hash) VALUES (%s, %s, %s)",
         (full_name, email,password_hash)
     )
     con.commit()

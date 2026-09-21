@@ -416,7 +416,7 @@ def register_page():
             flash('Email already registered.', 'error')
             return render_template('register.html')
         hashed = generate_password_hash(password)
-        create_user(full_name, email, None, hashed)
+        create_user(full_name, email,hashed)
         flash('Account created! Please sign in.', 'success')
         return redirect(url_for('login_page'))
     return render_template('register.html')
