@@ -30,9 +30,13 @@ def get_user_by_email(email):
 def create_user(full_name, email, password_hash):
     con = get_db_connection()
     cursor = con.cursor()
+    username = email.split("@")[0]
     cursor.execute(
-        "INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s)",
-        (full_name, email, password_hash)
+        """
+        INSERT INTO users (full_name, username, email, password_hash)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (full_name, username, email, password_hash)
     )
     con.commit()
     new_id = cursor.lastrowid
