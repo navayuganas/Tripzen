@@ -26,12 +26,16 @@ def extract(text, field):
 # ─────────────────────────────────────────
 # Ollama Cloud Setup
 # ─────────────────────────────────────────
-os.environ["OLLAMA_API_KEY"] = "4b23241f30ef486bba90fa70a0786457.8yNcAXrU-UsTIa2UlR7lCFou" 
-
 llm = ChatOllama(
     model="gemma4:31b-cloud",
     temperature=0.7,
     num_predict=1024,
+    base_url="https://ollama.com",
+    client_kwargs={
+        "headers": {
+            "Authorization": f"Bearer {os.environ['OLLAMA_API_KEY']}"
+        }
+    }
 )
 
 # ─────────────────────────────────────────
