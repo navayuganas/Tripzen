@@ -10,3 +10,4 @@ langchain-classic
 langchain-core
 duckduckgo-search
 reportlab
+ddgs
