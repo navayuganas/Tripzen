@@ -3,7 +3,8 @@ import os
 import re
 from datetime import date, timedelta
 
-from langchain_ollama import ChatOllama
+# from langchain_ollama import ChatOllama
+from langchain_groq import ChatGroq
 from langchain_classic.agents import create_tool_calling_agent, AgentExecutor
 from langchain_classic.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -26,18 +27,24 @@ def extract(text, field):
 # ─────────────────────────────────────────
 # Ollama Cloud Setup
 # ─────────────────────────────────────────
-llm = ChatOllama(
-    model="gemma4:cloud",
-    temperature=0.7,
-    num_predict=1024,
-    base_url="https://ollama.com",
-    client_kwargs={
-        "headers": {
-            "Authorization": f"Bearer {os.environ['OLLAMA_API_KEY']}"
-        }
-    }
-)
+# llm = ChatOllama(
+#     model="gemma4:cloud",
+#     temperature=0.7,
+#     num_predict=1024,
+#     base_url="https://ollama.com",
+#     client_kwargs={
+#         "headers": {
+#             "Authorization": f"Bearer {os.environ['OLLAMA_API_KEY']}"
+#         }
+#     }
+# )
 
+llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    temperature=0.7,
+    max_tokens=1024,
+    api_key=os.environ["GROQ_API_KEY"]
+)
 # ─────────────────────────────────────────
 # Tools
 # ─────────────────────────────────────────
