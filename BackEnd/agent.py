@@ -27,7 +27,7 @@ def extract(text, field):
 # Ollama Cloud Setup
 # ─────────────────────────────────────────
 llm = ChatOllama(
-    model="gemma4:31b-cloud",
+    model="gpt-oss:120b-cloud",
     temperature=0.7,
     num_predict=1024,
     base_url="https://ollama.com",
