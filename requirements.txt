@@ -11,3 +11,5 @@ langchain-core
 duckduckgo-search
 reportlab
 ddgs
+langchain-groq
+
