@@ -41,9 +41,13 @@ def extract(text, field):
 
 llm = ChatGroq(
     model="openai/gpt-oss-120b",
-    temperature=0.7,
+    temperature=0.3,
     max_tokens=1024,
-    api_key=os.environ["GROQ_API_KEY"]
+    api_key=os.environ["GROQ_API_KEY"],
+    model_kwargs={
+        "parallel_tool_calls": False,
+        "include_reasoning": False
+    }
 )
 # ─────────────────────────────────────────
 # Tools
