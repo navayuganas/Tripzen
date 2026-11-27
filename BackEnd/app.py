@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 # DB functions
 from db import get_history, save_message, delete_messages_by_session
-from db import get_db_connection, init_db
+from db import get_db_connection
 
 # Models
 from models.users import get_all_users, get_user_by_id, get_user_by_email, create_user, delete_user
@@ -19,10 +19,9 @@ from models.destinations import get_all_destinations, get_destination_id, search
 app = Flask(__name__,
     template_folder='../templates',
     static_folder='../static')
-app.secret_key = 'tripzen-secret-key'
+app.secret_key = os.environ["FLASK_SECRET_KEY"]
 CORS(app, origins=["http://127.0.0.1:3000", "http://localhost:3000", "http://127.0.0.1:5500", "http://localhost:5500", "http://localhost:5000"])
-with app.app_context():
-    init_db()
+
 
 # ─────────────────────────────────────────
 # USERS

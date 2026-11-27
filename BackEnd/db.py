@@ -2,11 +2,20 @@ import os
 import mysql.connector
 
 DB_CONFIG = {
-    'host': os.getenv('MYSQLHOST', 'localhost'),
-    'user': os.getenv('MYSQLUSER', 'root'),
-    'password': os.getenv('MYSQLPASSWORD', 'Yugan-22!!'),
-    'database': os.getenv('MYSQLDATABASE', 'chatbot'),
-    'port': int(os.getenv('MYSQLPORT', 3306))
+    "host": os.environ["MYSQLHOST"],
+    "user": os.environ["MYSQLUSER"],
+    "password": os.environ["MYSQLPASSWORD"],
+    "database": os.environ.get("MYSQLDATABASE", "tripzen"),
+    "port": int(os.environ.get("MYSQLPORT", "4000")),
+
+    # Secure TLS connection to TiDB
+    "ssl_ca": os.environ.get(
+        "MYSQL_SSL_CA",
+        "/etc/ssl/certs/ca-certificates.crt"
+    ),
+    "ssl_verify_cert": True,
+    "ssl_verify_identity": True,
+    "connection_timeout": 15
 }
 
 def get_db_connection():
