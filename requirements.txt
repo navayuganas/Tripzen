@@ -5,3 +5,8 @@ mysql-connector-python
 langchain
 langchain-community
 python-dotenv
+langchain-ollama
+langchain-classic
+langchain-core
+duckduckgo-search
+reportlab

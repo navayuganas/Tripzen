@@ -158,7 +158,7 @@ def create_pdf(itinerary_text: str, session_id: int = 0) -> str:
         from datetime import datetime
         filename    = f"itinerary_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
         output_path = generate_itinerary_pdf(itinerary_text, filename)
-        pdf_url     = f"http://127.0.0.1:5000/static/pdfs/{filename}"
+        pdf_url = f"/static/pdfs/{filename}"
         print(f"✅ PDF created: {pdf_url}")
         return f"PDF_URL:{pdf_url}"
     except Exception as e:
