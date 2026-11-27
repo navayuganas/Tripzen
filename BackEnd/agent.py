@@ -9,7 +9,7 @@ from langchain_classic.agents import create_tool_calling_agent, AgentExecutor
 from langchain_classic.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.tools.tavily_search import TavilySearchResults
 from pdf_generator import generate_itinerary_pdf
 
 from models.destinations import get_all_destinations
@@ -40,7 +40,7 @@ def extract(text, field):
 # )
 
 llm = ChatGroq(
-    model="openai/gpt-oss-120b",
+    model="llama-3.3-70b-versatile",
     temperature=0.3,
     max_tokens=1024,
     api_key=os.environ["GROQ_API_KEY"],
@@ -52,19 +52,27 @@ llm = ChatGroq(
 # ─────────────────────────────────────────
 # Tools
 # ─────────────────────────────────────────
-search = DuckDuckGoSearchRun()
+tavily_search = TavilySearchResults(max_results=5)
 
 @tool
 def web_search(query: str) -> str:
-    """Search the web for real-time travel information like weather,
-    flight prices, hotel availability, visa requirements, and current events."""
+    """Search the web for current travel information."""
     try:
-        print(f"🔍 Searching: {query}")
-        result = search.run(query)
-        print(f"✅ Search done")
-        return result
+        results = tavily_search.invoke({"query": query})
+
+        if not results:
+            return "No relevant search results found."
+
+        return "\n\n".join(
+            f"Title: {item.get('title', '')}\n"
+            f"URL: {item.get('url', '')}\n"
+            f"Content: {item.get('content', '')[:1000]}"
+            for item in results
+        )
+
     except Exception as e:
-        return f"Search failed: {str(e)}"
+        print(f"Tavily search error: {e}")
+        return "Web search is temporarily unavailable."
 
 
 @tool
