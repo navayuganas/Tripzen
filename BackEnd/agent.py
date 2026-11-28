@@ -40,7 +40,7 @@ def extract(text, field):
 # )
 
 llm = ChatGroq(
-    model="model="openai/gpt-oss-120b",
+    model="openai/gpt-oss-120b",
     temperature=0.3,
     max_tokens=1024,
     api_key=os.environ["GROQ_API_KEY"],
